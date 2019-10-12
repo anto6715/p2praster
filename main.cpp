@@ -4,7 +4,9 @@
 #include <random>
 #include "raster.h"
 
-
+void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double, container_hasher> &projectionInOut);
+void average(double *x, double *y);
+void pushSum(double *x, double *xi, double *xj, double *y, double *yi, double *yj, double di, double dj);
 void StartTheClock();
 double StopTheClock();
 void usage(char* cmd);
@@ -61,17 +63,17 @@ int main(int argc, char **argv) {
     long        ni; // points number
     long        *peerLastItem; // index of a peer last item
     uint32_t    domainSize = 1048575; // number of possible distinct items
-    int         peers = 2; // number of peers
-    int         fanOut = 3; //fan-out of peers
-    int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
+    int         peers = 5; // number of peers
+    int         fanOut = 4; //fan-out of peers
+    int         graphType = 4; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
     double      convThreshold = 0.001; // local convergence tolerance
     int         convLimit = 3; // number of consecutive rounds in which a peer must locally converge
-    int         roundsToExecute = -1;
+    int         roundsToExecute = 200;
     int         p_star = -1;
     double      delta = 0.04;
-    double      precision = 0.0;
-    int         threshold = 0;
-    int         min_size = 0;
+    double      precision = -4.2;
+    int         threshold = 2;
+    int         min_size = 3;
     int         radius = 0;
     string      name_file = "/home/antonio/Scrivania/Datasets/S-sets/s1.csv";
 
@@ -209,12 +211,6 @@ int main(int argc, char **argv) {
         cout <<"Time (seconds) required to load the dataset: " << greaddatasettime << "\n";
     }
 
-    /*** Insert data into an ordered structure  (for vertical partition of dataset) ***/
-    set<array<double, 2>> data;
-    set<array<double, 2>>::iterator it;
-    for (int k = 0; k < row; ++k) {
-        data.insert({dataset[k][0], dataset[k][1]});
-    }
 
     /*** Compute last item for each peer***/
     peerLastItem = (long *) calloc(peers, sizeof(long));
@@ -231,18 +227,35 @@ int main(int argc, char **argv) {
 
     peerLastItem[peers - 1] = ni-1;
 
+
+
     /*** check the partitioning correctness ***/
+    int lastNotNull=0;
     long sum = peerLastItem[0] + 1;
     //cerr << "peer 0:" << sum << "\n";
     for(int i = 1; i < peers; i++) {
-        sum += peerLastItem[i] - peerLastItem[i-1];
-        //cerr << "peer " << i << ":" << peerLastItem[i] - peerLastItem[i-1] << "\n";
-    }
+        if (!peerLastItem[i] && peerLastItem[i] != peerLastItem[i-1]) {
+            lastNotNull = i-1;
+            //cerr << "peer " << i << ":" << 0 << "\n";
+        } else {
+            if (peerLastItem[i-1] != 0) {
+                sum += peerLastItem[i] - peerLastItem[i-1];
+                //cerr << "peer " << i << ":" << peerLastItem[i] - peerLastItem[i-1] << "\n";
+            }
+            else if (peerLastItem[i]){
+                sum += peerLastItem[i] - peerLastItem[lastNotNull];
+                //cerr << "peer " << lastNotNull+1 << ":" << peerLastItem[i] - peerLastItem[lastNotNull] << "\n";
+            }
+        }
 
+
+    }
+    cout<< "sum: " << sum << endl;
     if(sum != ni) {
         fprintf(stdout, "ERROR: ni = %ld != sum = %ld\n", ni, sum);
         exit(EXIT_FAILURE);
     }
+    cout.flush();
 
     /*** assign parameters read from command line ***/
     params.name_file = name_file;
@@ -318,34 +331,28 @@ int main(int argc, char **argv) {
     if (!outputOnFile) {
         printf("\nApply Raster to each peer's dataset...\n");
     }
-    vector<unordered_map<array<int, 2>, int, container_hasher>> peers_projection;
-    vector<vector<unordered_set<array<int, 2>, container_hasher>>> peers_clusters;
-    vector<unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>> peers_all_points;
-
+    //vector<unordered_map<array<int, 2>, int, container_hasher>> peers_projection;
+    //vector<vector<unordered_set<array<int, 2>, container_hasher>>> peers_clusters;
+    //vector<unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>> peers_all_points;
+    unordered_map<array<int, 2>, double, container_hasher> *projection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
     StartTheClock();
     int start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
-        cout << "peer: " << peerID << endl;
-        unordered_map<array<int, 2>, int, container_hasher> projection;
-        vector<unordered_set<array<int, 2>, container_hasher>> clusters;
+        cout << "\npeer: " << peerID << endl;
+        cout << "start: "<< start << " end: " << peerLastItem[peerID] << endl;
+        //unordered_map<array<int, 2>, int, container_hasher> projection;
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
 
 
         /*** points agglomeration ***/
 
         // Raster version
-        //mapToTiles(dataset, precision, threshold, projection, start, peerLastItem[peerID]);
+        mapToTilesNoThreshold(dataset, precision, threshold, projection[peerID], start, peerLastItem[peerID]);
+        cout << "projection size: " << projection[peerID].size() << endl;
         // Raster' version
-        mapToTilesPrime(dataset, precision, threshold, projection, all_points, start, peerLastItem[peerID]);
+        //mapToTilesPrime(dataset, precision, threshold, projection, all_points, start, peerLastItem[peerID]);
 
-        /*** generate clusters from tiles ***/
-        clusteringTiles(projection, min_size, clusters);
         start = peerLastItem[peerID] + 1;
-
-        // save result obtained for each peer for the next steps
-        peers_projection.push_back(projection);
-        peers_all_points.push_back(all_points);
-        peers_clusters.push_back(clusters);
     }
 
     double rastertime = StopTheClock();
@@ -353,6 +360,167 @@ int main(int argc, char **argv) {
         printf("Raster done!\n");
         printf("Time (seconds) required by Raster: %f\n", rastertime);
     }
+    // this is used to estimate the number of peers
+    double *dimestimate = (double *) calloc(params.peers, sizeof(double));
+    dimestimate[0] = 1;
+    double *prevestimate = (double *) calloc(params.peers, sizeof(double));
+
+    double *streamsizeestimate = (double *) calloc(params.peers, sizeof(double));
+    streamsizeestimate[0] = peerLastItem[0] + 1;
+    for(int i = 1; i < peers; i++)
+        streamsizeestimate[i] = peerLastItem[i] - peerLastItem[i-1];
+
+    int Numberofconverged = params.peers;
+    bool *converged = (bool *) calloc(params.peers, sizeof(bool));
+    for(int i = 0; i < params.peers; i++)
+        converged[i] = false;
+
+    int *convRounds = (int *) calloc(params.peers, sizeof(int));
+    int rounds = 0;
+
+    if (!outputOnFile) {
+        cout <<"\nStarting distributed algorithm..." << endl;
+    }
+
+
+
+
+    while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
+
+        memcpy(prevestimate, dimestimate, params.peers * sizeof(double));
+
+        for(int peerID = 0; peerID < params.peers; peerID++){
+            // check peer convergence
+
+
+            // determine peer neighbors
+            igraph_vector_t neighbors;
+            igraph_vector_init(&neighbors, 0);
+            igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
+            long neighborsSize = igraph_vector_size(&neighbors);
+            if(fanOut < neighborsSize){
+                // randomly sample f adjacent vertices
+                igraph_vector_shuffle(&neighbors);
+                igraph_vector_remove_section(&neighbors, params.fanOut, neighborsSize);
+            }
+
+            neighborsSize = igraph_vector_size(&neighbors);
+            for(int i = 0; i < neighborsSize; i++){
+                int neighborID = (int) VECTOR(neighbors)[i];
+                igraph_integer_t edgeID;
+                igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
+
+                projectionMerge(projection[neighborID], projection[peerID]);
+                //memcpy(&projection[neighborID], &projection[peerID], sizeof(unordered_map<array<int, 2>, double, container_hasher>));
+                //average(&x[peerID], &x[neighborID]);
+                //memcpy(&x[neighborID], &x[peerID], sizeof(double));
+
+                double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
+                dimestimate[peerID] = mean;
+                dimestimate[neighborID] = mean;
+
+                double mean_size = (streamsizeestimate[peerID] + streamsizeestimate[neighborID]) / 2;
+                streamsizeestimate[peerID] = mean_size;
+                streamsizeestimate[neighborID] = mean_size;
+            }
+
+            igraph_vector_destroy(&neighbors);
+        }
+
+        // check local convergence
+        if (params.roundsToExecute < 0) {
+            for(int peerID = 0; peerID < params.peers; peerID++){
+
+                if(converged[peerID])
+                    continue;
+
+                bool dimestimateconv;
+                if(prevestimate[peerID])
+                    dimestimateconv = fabs((prevestimate[peerID] - dimestimate[peerID]) / prevestimate[peerID]) < params.convThreshold;
+                else
+                    dimestimateconv = false;
+
+                if(dimestimateconv)
+                    convRounds[peerID]++;
+                else
+                    convRounds[peerID] = 0;
+
+                //printf ("PeerID %d, round %d, convRound %d\n", peerID, rounds, convRounds[peerID]);
+
+
+                converged[peerID] = (convRounds[peerID] >= params.convLimit);
+                if(converged[peerID]){
+                    //printf("peer %d rounds before convergence: %d\n", peerID, rounds + 1);
+                    Numberofconverged --;
+                }
+            }
+        }
+        rounds++;
+        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          ";
+
+        params.roundsToExecute--;
+    }
+
+    cout << "dimensione stimata: " <<(int) (1/dimestimate[0]) << endl;
+
+    for(int peerID = 0; peerID < params.peers; peerID++){
+        if (peerID == 0) {
+            cout << "\npeer: " << peerID << endl;
+            cout << "projection size: " << projection[peerID].size() << endl;
+            unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+            double count = 0;
+            it = projection[peerID].begin();
+            while (it != projection[peerID].end()) {
+                cout << "tile: " << (it-> first)[0] << "," << (it-> first)[1] << ": " << (params.peers*it->second) << endl;
+                count += it->second;
+                it++;
+            }
+            cout << "count: " << count << endl;
+
+            start = peerLastItem[peerID] + 1;
+        }
+    }
+
+
+
+
+
+
+}
+
+void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double , container_hasher> &projectionInOut){
+    unordered_map<array<int, 2>, double, container_hasher>::iterator itIn;
+    unordered_map<array<int, 2>, double , container_hasher>::iterator itInOut;
+    double *temp = new double[1];
+    itIn = projectionIn.begin();
+    while (itIn != projectionIn.end()) {
+        itInOut = projectionInOut.find(itIn -> first);
+        array<int, 2> tile = itIn -> first;
+        if (itInOut != projectionInOut.end()) {
+            *temp = itInOut -> second;
+            average( &itInOut->second, &itIn->second);
+            average(&itIn->second, temp);
+        } else {
+            projectionInOut[itIn -> first] = (itIn->second)/2.0;
+            average(&itIn->second, nullptr);
+        }
+        itIn++;
+    }
+
+
+
+}
+
+void average(double *x, double *y)  {
+    if (x == nullptr) {
+        cerr << "x cannot be null!";
+        exit(EXIT_FAILURE);
+    } else if (y == nullptr) {
+        *x = *x/2.0;
+    } else {
+        *x = (*x+*y)/2.0;
+    }
+
 }
 
 void StartTheClock(){
@@ -469,9 +637,6 @@ igraph_t generateErdosRenyiGraph(igraph_integer_t n, igraph_erdos_renyi_t type, 
     return ER_graph;
 }
 
-
-
-
 igraph_t generateRegularGraph(igraph_integer_t n, igraph_integer_t k)
 {
     // n = The number of vertices in the graph
@@ -494,8 +659,6 @@ igraph_t generateRegularGraph(igraph_integer_t n, igraph_integer_t k)
 
     return R_graph;
 }
-
-
 
 igraph_t generateRandomGraph(int type, int n)
 {
@@ -523,7 +686,6 @@ igraph_t generateRandomGraph(int type, int n)
     return random_graph;
 
 }
-
 
 void printGraphType(int type)
 {

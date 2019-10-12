@@ -39,6 +39,8 @@ void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, int, co
 
 void mapToTiles(double **m, double precision, int threshold, unordered_map<array<int, 2>, int, container_hasher> &projection, int start, int end);
 
+void mapToTilesNoThreshold(double **m, double precision, int threshold, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end);
+
 void mapToTilesPrime(double **m, double precision, int threshold, unordered_map<array<int, 2>, int, container_hasher> &projection, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, int start, int end);
 
 void clusteringTiles(unordered_map<array<int, 2>, int, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters);

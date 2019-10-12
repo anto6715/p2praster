@@ -25,8 +25,6 @@ void mapToTilesPrime(   double **m,
                         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points,
                         int start,
                         int end) {
-    cout << start << endl;
-    cout << end << endl;
     double scalar;
     unordered_map<array<int, 2>, int, container_hasher>::iterator it;
     unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
@@ -52,8 +50,6 @@ void mapToTilesPrime(   double **m,
             all_points[tile] = point;
         }
     }
-    cout << "projection before threshold: " << projection.size() << endl;
-
     // remove tile with count < threshold
     it = projection.begin();
     while (it != projection.end()) {
@@ -66,7 +62,23 @@ void mapToTilesPrime(   double **m,
 
 }
 
-
+void mapToTilesNoThreshold(double **m, double precision, int threshold, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end) {
+    double scalar;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    scalar = pow(10, precision);
+    int lat, lon;
+    for (int i = start; i <= end; i++) {
+        lat =(int) (m[i][0] * scalar);
+        lon =(int) (m[i][1] * scalar);
+        array<int, 2> tile = {lat,lon};
+        it = projection.find(tile);
+        if (it != projection.end()) {
+            it->second++;
+        } else {
+            projection[tile] = 1.0;
+        }
+    }
+} //unordered
 
 void mapToTiles(double **m, double precision, int threshold, int n, unordered_map<array<int, 2>, int, container_hasher> &projection, int start, int end) {
     double scalar;

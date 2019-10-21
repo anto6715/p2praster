@@ -514,13 +514,17 @@ int main(int argc, char **argv) {
 
     int *q = new int[params.peers];
     int *p = new int[params.peers];
-    int min =1;
+    int *squares = new int[params.peers];
+    int min =2;
+    for (int i = 0; i < params.peers; i++) {
+        squares[i] = min;
+    }
     /*** Each peer obtain its "square(s)" and remove from projection the tiles that are out***/
     for(int peerID = 0; peerID < params.peers; peerID++) {
         int a, b, restA, restB;
 
         // find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
-        getGridSize(&p[peerID], &q[peerID], dimestimate[peerID], min);
+        getGridSize(&p[peerID], &q[peerID], dimestimate[peerID], squares[peerID]);
 
         // compute how much tiles for each square on y (a) and x (b) axis
         a =     (maxY[peerID]-minY[peerID]) / q[peerID];
@@ -531,119 +535,56 @@ int main(int argc, char **argv) {
 
         // i, j coordinate in grid p*q,
         // m, n coordinate in grid (maxX-minX)*(maxY-minY), but with origin in 0
-        int *m, *n , *i, *j;
-        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
-            m =(int*) malloc((min+1) * sizeof(int));
-            n =(int*) malloc((min+1) * sizeof(int));
-            i =(int*) malloc((min+1) * sizeof(int));
-            j =(int*) malloc((min+1) * sizeof(int));
-        } else {
-            m =(int*) malloc(min * sizeof(int));
-            n =(int*) malloc(min * sizeof(int));
-            i =(int*) malloc(min * sizeof(int));
-            j =(int*) malloc(min * sizeof(int));
+        int *i, *j;
+        if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
+            squares[peerID]++;
         }
-        i[0] = peerID /p[peerID] + 1;
-        j[0] = peerID %p[peerID] + 1;
-        if (i[0] <= restA) {
-            m[0] = i[0]*(a+1);
-        } else {
-            m[0] = restA*(a+1) + (i[0]-restA)*a;
-        }
-        if (j[0] <= restB) {
-            n[0] = j[0]*(b+1);
-        } else {
-            n[0] = restB*(b+1) + (j[0]-restB)*b;
-        }
-        cout << "x1: " << m[0]<< " x2: " << n[0] << endl;
-        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
-            i[1] = (peerID + (int)dimestimate[peerID])/p[peerID] +1;
-            j[1] = (peerID + (int)dimestimate[peerID]) % p[peerID] +1;
-            if (i[1] <= restA) {
-                m[1] = i[1]*(a+1);
-            } else {
-                m[1] = restA*(a+1) + (i[1]-restA)*a;
-            }
-            if (j[1] <= restB) {
-                n[1] = j[1]*(b+1);
-            } else {
-                n[1] = restB*(b+1) + (j[1]-restB)*b;
-            }
-            cout << "x1: " << m[1]<< " x2: " << n[1]  << endl;
-        }
+        i =(int*) malloc(squares[peerID] * sizeof(int));
+        j =(int*) malloc(squares[peerID] * sizeof(int));
+
+        y1[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
+        x1[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
+        y2[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
+        x2[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
 
 
-        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
-            y1[peerID] =(int*) malloc((min+1) * sizeof(int));
-            x1[peerID] =(int*) malloc((min+1) * sizeof(int));
-            y2[peerID] =(int*) malloc((min+1) * sizeof(int));
-            x2[peerID] =(int*) malloc((min+1) * sizeof(int));
-        } else {
-            y1[peerID] =(int*) malloc(min * sizeof(int));
-            x1[peerID] =(int*) malloc(min * sizeof(int));
-            y2[peerID] =(int*) malloc(min * sizeof(int));
-            x2[peerID] =(int*) malloc(min * sizeof(int));
-        }
-        y1[peerID][0] = m[0] + minY[peerID];
-        x1[peerID][0] = n[0] + minX[peerID];
-        if (i[0] <= restA && restA != 0) {
-            y2[peerID][0] = y1[peerID][0] - (a+1);
+        for (int k = 0; k < squares[peerID]; k++) {
+            i[k] = (peerID + k*(int)dimestimate[peerID]) /p[peerID] + 1;
+            j[k] = (peerID + k*(int)dimestimate[peerID]) %p[peerID] + 1;
 
-        } else {
-            y2[peerID][0] = y1[peerID][0] - (a);
-        }
-        if (j[0] <= restB  && restB != 0) {
-            x2[peerID][0] = x1[peerID][0] - (b+1);
-        } else {
-            x2[peerID][0] = x1[peerID][0] - (b);
-        }
-        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
-            y1[peerID][1] = m[1] + minY[peerID];
-            x1[peerID][1] = n[1] + minX[peerID];
-            if (i[1] <= restA && restA != 0) {
-                y2[peerID][1] = y1[peerID][1] - (a+1);
+            y1[peerID][k] = i[k] <= restA ? i[k]*(a+1) + minY[peerID] : restA*(a+1) + (i[k]-restA)*a + minY[peerID];
+            x1[peerID][k] = j[k] <= restB ? j[k]*(b+1) + minX[peerID] : restB*(b+1) + (j[k]-restB)*b + minX[peerID];
+            y2[peerID][k] = (i[k] <= restA && restA != 0) ? y1[peerID][k] - (a+1) : y1[peerID][k] - (a);
+            x2[peerID][k] = (j[k] <= restB  && restB != 0) ? x1[peerID][k] - (b+1) : x1[peerID][k] - (b);
+            // include the left and bottom edge of grid
+            if (y2[peerID][k] == minY[peerID])
+                y2[peerID][k] -= 1;
 
-            } else {
-                y2[peerID][1] = y1[peerID][1] - (a);
-            }
-            if (j[1] <= restB && restB != 0) {
-                x2[peerID][1] = x1[peerID][1] - (b+1);
-            } else {
-                x2[peerID][1] = x1[peerID][1] - (b);
-            }
+            if (x2[peerID][k] == minX[peerID])
+                x2[peerID][k] -= 1;
+            cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
         }
     }
-
+    unordered_map<array<int, 2>, double, container_hasher> *squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
     for(int peerID = 0; peerID < params.peers; peerID++) {
-        int count = 0;
+        int skip;
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
         it = projection[peerID].begin();
         while (it != projection[peerID].end()) {
-            if (count == 876)
-                cout << endl;
-            array<int,2> tile = it -> first;
-            int a = tile[0];
-            int b = tile[1];
-            if (y2[peerID][0] == minY[peerID]) {
-                y2[peerID][0] -= 1;
-            }
-            if (x2[peerID][0] == minX[peerID]) {
-                x2[peerID][0] -= 1;
-            }
-            if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
-                count++;
-                if ( (a <= x1[peerID][0] && a > x2[peerID][0] && b <= y1[peerID][0] && b > y2[peerID][0]) || (a <= x1[peerID][1] && a > x2[peerID][1] && b <= y1[peerID][1] && b > y2[peerID][1]) ) {
-                    it++;
-                } else {
+            skip = 0;
+            int a = (it -> first)[0];
+            int b = (it -> first)[1];
+            for (int k = 0; k < squares[peerID]; k++) {
+                if (a <= x1[peerID][k] && a > x2[peerID][k] && b <= y1[peerID][k] && b > y2[peerID][k]) {
+                    (squareProjection[peerID])[it -> first] = it -> second;
                     projection[peerID].erase(it++);
-                }
-            } else {
-                if ( a > x1[peerID][0] || a <= x2[peerID][0] || b > y1[peerID][0] || b <= y2[peerID][0]) {
-                    projection[peerID].erase(it++);
-                } else {
-                    it++;
+                    skip = 1;
+                    break;
                 }
             }
+            if (!skip)
+                it++;
+
         }
     }
 
@@ -653,20 +594,21 @@ int main(int argc, char **argv) {
     for(int peerID = 0; peerID < params.peers; peerID++) {
         //cout << "dim: " << projection[peerID].size() << endl;
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-        it = projection[peerID].begin();
-        while (it != projection[peerID].end()) {
+        it = squareProjection[peerID].begin();
+        while (it != squareProjection[peerID].end()) {
+            data.insert(it->first);
             //cout << "X: " << (it -> first)[0] << " y: "<<(it -> first)[1] << endl;
             count++;
             it++;
         }
     }
 
-    /*** stampo su file il dataset riunito ed ordinato, per veriicarne la correttezza***/
+    /*** stampo su file il dataset riunito ed ordinato, per verificarne la correttezza***/
     /*ofstream outfile("merge.csv");
     set<array<int,2>>::iterator it2;
     it2 = data.begin();
     while (it2 != data.end()) {
-        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
+        cout << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
         it2++;
     }
     outfile.close();*/

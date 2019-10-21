@@ -4,11 +4,12 @@
 #include <random>
 #include "raster.h"
 
+
+void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY);
 void getGridSize(int *p, int * q, int peers, int min);
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double, container_hasher> &projectionInOut);
 void average(double *x, double *y);
-void pushSum(double *x, double *xi, double *xj, double *y, double *yi, double *yj, double di, double dj);
 void StartTheClock();
 double StopTheClock();
 void usage(char* cmd);
@@ -73,8 +74,8 @@ int main(int argc, char **argv) {
     int         roundsToExecute = -1;
     int         p_star = -1;
     double      delta = 0.04;
-    double      precision = -3.7;
-    int         threshold = 2;
+    double      precision = -4.2;
+    int         threshold = 3;
     int         min_size = 3;
     int         radius = 0;
     string      name_file = "/home/antonio/Scrivania/Datasets/S-sets/s1.csv";
@@ -488,22 +489,7 @@ int main(int argc, char **argv) {
 
     /*** per stampare il dataset (ordinato) ottenuto da ogni peer***/
     /*for(int peerID = 0; peerID < params.peers; peerID++) {
-        ofstream outfile(to_string(peerID) +".csv");
-        set<array<int,2>> data;
-        unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-        set<array<int,2>>::iterator it2;
-        it = projection[peerID].begin();
-        while (it != projection[peerID].end()) {
-            data.insert(it -> first);
-            it++;
-        }
-
-        it2 = data.begin();
-        while (it2 != data.end()) {
-            outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
-            it2++;
-        }
-        outfile.close();
+        printOrderedProjection(peerID, params.peers, projection[peerID]);
     }*/
 
     int old = projection[0].size(); // per confrontare la correttezza del seguente pezzo di codice
@@ -519,7 +505,9 @@ int main(int argc, char **argv) {
     for (int i = 0; i < params.peers; i++) {
         squares[i] = min;
     }
-    /*** Each peer obtain its "square(s)" and remove from projection the tiles that are out***/
+
+
+    /*** Each peer obtain its "square(s)" coordinate(s)***/
     for(int peerID = 0; peerID < params.peers; peerID++) {
         int a, b, restA, restB;
 
@@ -565,6 +553,7 @@ int main(int argc, char **argv) {
             cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
         }
     }
+    /*** Each peer find the tiles into own square(s)***/
     unordered_map<array<int, 2>, double, container_hasher> *squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
     for(int peerID = 0; peerID < params.peers; peerID++) {
         int skip;
@@ -584,11 +573,53 @@ int main(int argc, char **argv) {
             }
             if (!skip)
                 it++;
-
         }
     }
 
-    /*** Unisco le singole projection di ogni peer per verificare correttezza***/
+    vector<unordered_set<array<int, 2>, container_hasher>> *clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
+    for(int peerID = 0; peerID < params.peers; peerID++) {
+        clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
+        printClusters(clusters[peerID], params.precision, peerID);
+        cout << "peer: " << peerID << ", size cluster: " << clusters[peerID].size() << endl;
+    }
+
+
+    for(int peerID = 1; peerID < params.peers; peerID++) {
+        int equals = 0;
+        unordered_set<array<int, 2>, container_hasher>::iterator it1;
+        unordered_set<array<int, 2>, container_hasher>::iterator it2;
+        for (int k = 0; k < clusters[peerID].size(); k++) {
+            int temp = clusters[0].size();
+            for (int l = 0; l < temp; l++) {
+                if (clusters[peerID].at(k).size() == clusters[0].at(l).size()) {
+                    it1 = clusters[peerID].at(k).begin();
+                    it2 = clusters[0].at(l).begin();
+                    for (int m = 0; m <clusters[0].at(l).size() ; m++) {
+                        if ( (*it1) == (*it2)) {
+                            equals = 1;
+                            it2++;
+                            break;
+                        }
+                        it2++;
+                    }
+                }
+            }
+            if (!equals) {
+                clusters[0].push_back(clusters[peerID].at(k));
+            }
+        }
+    }
+
+    printClusters(clusters[0], params.precision, 0);
+    int temp = 0;
+    for (int j = 0; j < clusters[0].size(); j++) {
+        temp += clusters[0].at(j).size();
+    }
+
+    cout << "peer: " << 0 << ", size cluster: " << clusters[0].size() << endl;
+    cout << "peer: " << 0 << ", tiles in the cluster: " << temp << endl;
+
+    /*** Unisco le singole squareProjection di ogni peer per verificare correttezza***/
     int count = 0;
     set<array<int,2>> data;
     for(int peerID = 0; peerID < params.peers; peerID++) {
@@ -608,13 +639,33 @@ int main(int argc, char **argv) {
     set<array<int,2>>::iterator it2;
     it2 = data.begin();
     while (it2 != data.end()) {
-        cout << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
+        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
         it2++;
     }
     outfile.close();*/
 
 
     cout << "count old : " << old << "\ncount new: " << count << endl;
+
+}
+
+void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection) {
+    ofstream outfile(to_string(peerID) +".csv");
+    set<array<int,2>> data;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    set<array<int,2>>::iterator it2;
+    it = projection.begin();
+    while (it != projection.end()) {
+        data.insert(it -> first);
+        it++;
+    }
+
+    it2 = data.begin();
+    while (it2 != data.end()) {
+        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
+        it2++;
+    }
+    outfile.close();
 
 }
 

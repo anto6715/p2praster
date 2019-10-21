@@ -4,6 +4,8 @@
 #include <random>
 #include "raster.h"
 
+void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY);
+void getGridSize(int *p, int * q, int peers, int min);
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double, container_hasher> &projectionInOut);
 void average(double *x, double *y);
 void pushSum(double *x, double *xi, double *xj, double *y, double *yi, double *yj, double di, double dj);
@@ -63,7 +65,7 @@ int main(int argc, char **argv) {
     long        ni; // points number
     long        *peerLastItem; // index of a peer last item
     uint32_t    domainSize = 1048575; // number of possible distinct items
-    int         peers = 13; // number of peers
+    int         peers = 10; // number of peers
     int         fanOut = 4; //fan-out of peers
     int         graphType = 3; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
     double      convThreshold = 0.0000000001; // local convergence tolerance
@@ -71,8 +73,8 @@ int main(int argc, char **argv) {
     int         roundsToExecute = -1;
     int         p_star = -1;
     double      delta = 0.04;
-    double      precision = -4.2;
-    int         threshold = 3;
+    double      precision = -3.7;
+    int         threshold = 2;
     int         min_size = 3;
     int         radius = 0;
     string      name_file = "/home/antonio/Scrivania/Datasets/S-sets/s1.csv";
@@ -327,9 +329,9 @@ int main(int argc, char **argv) {
     }
 
     // add first run of raster algorithm for each peer
-    /*** Apply Raster to each peer's dataset ***/
+    /*** Apply first Raster projection to each peer's dataset ***/
     if (!outputOnFile) {
-        printf("\nApply Raster to each peer's dataset...\n");
+        printf("\nApply first Raster projection to each peer's dataset...\n");
     }
     unordered_map<array<int, 2>, double, container_hasher> *projection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
     StartTheClock();
@@ -355,11 +357,12 @@ int main(int argc, char **argv) {
     double rastertime = StopTheClock();
     if (!outputOnFile) {
         printf("Raster done!\n");
-        printf("Time (seconds) required by Raster: %f\n", rastertime);
+        printf("Time (seconds) required by first Raster projection: %f\n", rastertime);
     }
     // this is used to estimate the number of peers
     double *dimestimate = (double *) calloc(params.peers, sizeof(double));
     dimestimate[0] = 1;
+
     double *prevestimate = (double *) calloc(params.peers, sizeof(double));
 
     double *streamsizeestimate = (double *) calloc(params.peers, sizeof(double));
@@ -368,11 +371,13 @@ int main(int argc, char **argv) {
         streamsizeestimate[i] = peerLastItem[i] - peerLastItem[i-1];
 
     int Numberofconverged = params.peers;
+
     bool *converged = (bool *) calloc(params.peers, sizeof(bool));
     for(int i = 0; i < params.peers; i++)
         converged[i] = false;
 
     int *convRounds = (int *) calloc(params.peers, sizeof(int));
+
     int rounds = 0;
 
     if (!outputOnFile) {
@@ -453,13 +458,6 @@ int main(int argc, char **argv) {
         params.roundsToExecute--;
     }
 
-
-    int *minX = (int *) calloc(params.peers, sizeof(int));
-    int *minY = (int *) calloc(params.peers, sizeof(int));
-    int *maxX = (int *) calloc(params.peers, sizeof(int));
-    int *maxY = (int *) calloc(params.peers, sizeof(int));
-
-
     /*** Remove tiles < threshold***/
     for(int peerID = 0; peerID < params.peers; peerID++){
         dimestimate[peerID] = round(1/dimestimate[peerID]);
@@ -477,96 +475,20 @@ int main(int argc, char **argv) {
     }
 
     /*** Simultaneous minimum and maximum algorithm***/
+    int *minX = (int *) calloc(params.peers, sizeof(int));
+    int *minY = (int *) calloc(params.peers, sizeof(int));
+    int *maxX = (int *) calloc(params.peers, sizeof(int));
+    int *maxY = (int *) calloc(params.peers, sizeof(int));
+
     for(int peerID = 0; peerID < params.peers; peerID++){
-        int count = 0;
-        int *x1 = new int;
-        int *x2 = new int;
-        int *y1 = new int;
-        int *y2 = new int;
-        unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-        it = projection[peerID].begin();
-        if ((projection[peerID].size() %2) != 0) {
-            minX[peerID] = (it -> first)[0];  // set as minX the first value
-            minY[peerID] = (it -> first)[1];  // set as minY the first value
-            maxX[peerID] = (it -> first)[0];  // set as maxX the first value
-            maxY[peerID] = (it -> first)[1];  // set as maxY the first value
-            it++;
-            count++;
-        } else {
-            *x1 = (it -> first)[0];
-            *y1 = (it -> first)[1];
-            it++;
-            *x2 = (it -> first)[0];
-            *y2 = (it -> first)[1];
-            it++;
-            if (*x1 <= *x2){
-                    minX[peerID] = *x1;
-                    maxX[peerID] = *x2;
-            } else {
-                    minX[peerID] = *x2;
-                    maxX[peerID] = *x1;
-            }
-
-            if (*y1 <= *y2){
-                    minY[peerID] = *y1;
-                    maxY[peerID] = *y2;
-            } else {
-                    minY[peerID] = *y2;
-                    maxY[peerID] = *y1;
-            }
-        }
-
-        while (it != projection[peerID].end()) {
-            *x1 = (it -> first)[0];
-            *y1 = (it -> first)[1];
-            it++;
-            *x2 = (it -> first)[0];
-            *y2 = (it -> first)[1];
-            it++;
-            if (*x1 <= *x2){
-                if ( *x1 < minX[peerID]) {
-                    minX[peerID] = *x1;
-                }
-
-                if ( *x2 > maxX[peerID]) {
-                    maxX[peerID] = *x2;
-                }
-            } else {
-                if ( *x2 < minX[peerID]) {
-                    minX[peerID] = *x2;
-                }
-
-                if ( *x1 > maxX[peerID]) {
-                    maxX[peerID] = *x1;
-                }
-            }
-
-            if (*y1 <= *y2){
-                if ( *y1 < minY[peerID]) {
-                    minY[peerID] = *y1;
-                }
-
-                if ( *y2 > maxY[peerID]) {
-                    maxY[peerID] = *y2;
-                }
-            } else {
-                if ( *y2 < minY[peerID]) {
-                    minY[peerID] = *y2;
-                }
-
-                if ( *y1 > maxY[peerID]) {
-                    maxY[peerID] = *y1;
-                }
-            }
-        }
+       simultaneousMaxMin(projection[peerID], &maxX[peerID], &minX[peerID], &maxY[peerID], &minY[peerID]);
 
     }
 
-    int count = 0;
+
     /*** per stampare il dataset (ordinato) ottenuto da ogni peer***/
     /*for(int peerID = 0; peerID < params.peers; peerID++) {
         ofstream outfile(to_string(peerID) +".csv");
-        cout << "dim: " << projection[peerID].size() << endl;
         set<array<int,2>> data;
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
         set<array<int,2>>::iterator it2;
@@ -583,57 +505,46 @@ int main(int argc, char **argv) {
         }
         outfile.close();
     }*/
-    /*** Each peer obtain its "sqare(s)" and remove from projection the tiles that are out***/
-    int old = projection[0].size();
-    for(int peerID = 0; peerID < params.peers; peerID++) {
-        int count = 0;
-        int a, b, restA, restB; // a = height of tile, b width of partition
-        int cursorA, cursorB;
-        int x = sqrt(dimestimate[peerID]);
-        int sqrt_p = x+1;
-        if ((x*x) != dimestimate[peerID]) {
-            if ( (x*(x+1)) < dimestimate[peerID] ) {
-                x +=1;
-            }
-        } else {
-            sqrt_p--;
-        }
-        a = (maxY[peerID]-minY[peerID]) / x;
-        restA = (maxY[peerID]-minY[peerID]) % x;
-        b = (maxX[peerID]-minX[peerID]) / sqrt_p;
-        restB = (maxX[peerID]-minX[peerID]) % sqrt_p;
-        int tempRestA = restA;
-        int tempRestB = restB;
-        cursorA = a;
-        cursorB = b;
-        if (tempRestA) {
-            cursorA++;
-            tempRestA--;
-        }
 
-        if (tempRestB) {
-            cursorB++;
-            tempRestB--;
-        }
+    int old = projection[0].size(); // per confrontare la correttezza del seguente pezzo di codice
+    int **y1 = new int*[params.peers];
+    int **x1 = new int*[params.peers];
+    int **y2 = new int*[params.peers];
+    int **x2 = new int*[params.peers];
+
+    int *q = new int[params.peers];
+    int *p = new int[params.peers];
+    int min =1;
+    /*** Each peer obtain its "square(s)" and remove from projection the tiles that are out***/
+    for(int peerID = 0; peerID < params.peers; peerID++) {
+        int a, b, restA, restB;
+
+        // find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
+        getGridSize(&p[peerID], &q[peerID], dimestimate[peerID], min);
+
+        // compute how much tiles for each square on y (a) and x (b) axis
+        a =     (maxY[peerID]-minY[peerID]) / q[peerID];
+        b =     (maxX[peerID]-minX[peerID]) / p[peerID];
+        restA = (maxY[peerID]-minY[peerID]) % q[peerID];
+        restB = (maxX[peerID]-minX[peerID]) % p[peerID];
         cout << "peer: " << peerID << endl;
 
+        // i, j coordinate in grid p*q,
+        // m, n coordinate in grid (maxX-minX)*(maxY-minY), but with origin in 0
         int *m, *n , *i, *j;
-        int nTiles;
-        if (peerID < x*sqrt_p - dimestimate[peerID] ) {
-            nTiles = 2;
-            m =(int*) malloc(2 * sizeof(int));
-            n =(int*) malloc(2 * sizeof(int));
-            i =(int*) malloc(2 * sizeof(int));
-            j =(int*) malloc(2 * sizeof(int));
+        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
+            m =(int*) malloc((min+1) * sizeof(int));
+            n =(int*) malloc((min+1) * sizeof(int));
+            i =(int*) malloc((min+1) * sizeof(int));
+            j =(int*) malloc((min+1) * sizeof(int));
         } else {
-            nTiles = 1;
-            m =(int*) malloc(sizeof(int));
-            n =(int*) malloc(sizeof(int));
-            i =(int*) malloc(sizeof(int));
-            j =(int*) malloc(sizeof(int));
+            m =(int*) malloc(min * sizeof(int));
+            n =(int*) malloc(min * sizeof(int));
+            i =(int*) malloc(min * sizeof(int));
+            j =(int*) malloc(min * sizeof(int));
         }
-        i[0] = peerID/sqrt_p +1;
-        j[0] = peerID % sqrt_p +1;
+        i[0] = peerID /p[peerID] + 1;
+        j[0] = peerID %p[peerID] + 1;
         if (i[0] <= restA) {
             m[0] = i[0]*(a+1);
         } else {
@@ -645,11 +556,9 @@ int main(int argc, char **argv) {
             n[0] = restB*(b+1) + (j[0]-restB)*b;
         }
         cout << "x1: " << m[0]<< " x2: " << n[0] << endl;
-        if (peerID < x*sqrt_p - dimestimate[peerID] ) {
-            i[1] = (peerID + (int)dimestimate[peerID])/sqrt_p +1;
-            j[1] = (peerID + (int)dimestimate[peerID]) % sqrt_p +1;
-            //m[1] = restA*(a+1) + (i[1]-restA)*a;
-            //n[1] = restB*(b+1) + (j[1]-restB)*b;
+        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
+            i[1] = (peerID + (int)dimestimate[peerID])/p[peerID] +1;
+            j[1] = (peerID + (int)dimestimate[peerID]) % p[peerID] +1;
             if (i[1] <= restA) {
                 m[1] = i[1]*(a+1);
             } else {
@@ -660,140 +569,192 @@ int main(int argc, char **argv) {
             } else {
                 n[1] = restB*(b+1) + (j[1]-restB)*b;
             }
-            cout << "x1: " << m[1]<< " x2: " << n[1] << "\n" << endl;
+            cout << "x1: " << m[1]<< " x2: " << n[1]  << endl;
         }
 
-        int *l1, *l2, *l3, *l4;     // yi, xi, yi-1, xi-1
-        if (peerID < x*sqrt_p - dimestimate[peerID] ) {
-            nTiles = 2;
-            l1 =(int*) malloc(2 * sizeof(int));
-            l2 =(int*) malloc(2 * sizeof(int));
-            l3 =(int*) malloc(2 * sizeof(int));
-            l4 =(int*) malloc(2 * sizeof(int));
+
+        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
+            y1[peerID] =(int*) malloc((min+1) * sizeof(int));
+            x1[peerID] =(int*) malloc((min+1) * sizeof(int));
+            y2[peerID] =(int*) malloc((min+1) * sizeof(int));
+            x2[peerID] =(int*) malloc((min+1) * sizeof(int));
         } else {
-            l1 =(int*) malloc(sizeof(int));
-            l2 =(int*) malloc(sizeof(int));
-            l3 =(int*) malloc(sizeof(int));
-            l4 =(int*) malloc(sizeof(int));
+            y1[peerID] =(int*) malloc(min * sizeof(int));
+            x1[peerID] =(int*) malloc(min * sizeof(int));
+            y2[peerID] =(int*) malloc(min * sizeof(int));
+            x2[peerID] =(int*) malloc(min * sizeof(int));
         }
-        l1[0] = m[0] + minY[peerID];
-        l2[0] = n[0] + minX[peerID];
-        if (i[0] <= restA) {
-            l3[0] = l1[0] - (a+1);
+        y1[peerID][0] = m[0] + minY[peerID];
+        x1[peerID][0] = n[0] + minX[peerID];
+        if (i[0] <= restA && restA != 0) {
+            y2[peerID][0] = y1[peerID][0] - (a+1);
 
         } else {
-            l3[0] = l1[0] - (a);
+            y2[peerID][0] = y1[peerID][0] - (a);
         }
-        if (j[0] <= restB) {
-            l4[0] = l2[0] - (b+1);
+        if (j[0] <= restB  && restB != 0) {
+            x2[peerID][0] = x1[peerID][0] - (b+1);
         } else {
-            l4[0] = l2[0] - (b);
+            x2[peerID][0] = x1[peerID][0] - (b);
         }
-        if (peerID < x*sqrt_p - dimestimate[peerID] ) {
-            l1[1] = m[1] + minY[peerID];
-            l2[1] = n[1] + minX[peerID];
-            if (i[1] <= restA) {
-                l3[1] = l1[1] - (a+1);
+        if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
+            y1[peerID][1] = m[1] + minY[peerID];
+            x1[peerID][1] = n[1] + minX[peerID];
+            if (i[1] <= restA && restA != 0) {
+                y2[peerID][1] = y1[peerID][1] - (a+1);
 
             } else {
-                l3[1] = l1[1] - (a);
+                y2[peerID][1] = y1[peerID][1] - (a);
             }
-            if (j[1] <= restB) {
-                l4[1] = l2[1] - (b+1);
+            if (j[1] <= restB && restB != 0) {
+                x2[peerID][1] = x1[peerID][1] - (b+1);
             } else {
-                l4[1] = l2[1] - (b);
+                x2[peerID][1] = x1[peerID][1] - (b);
             }
         }
+    }
 
+    for(int peerID = 0; peerID < params.peers; peerID++) {
+        int count = 0;
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
         it = projection[peerID].begin();
         while (it != projection[peerID].end()) {
-            //cout << "tile: " << (it-> first)[0] << "," << (it-> first)[1] << ": " << (it->second) << endl;
-            //count +=it -> second;
+            if (count == 876)
+                cout << endl;
             array<int,2> tile = it -> first;
             int a = tile[0];
             int b = tile[1];
-            if (peerID == 1)
-                cout << endl;
-            if (l3[0] == minY[peerID]) {
-                l3[0] -= 0.0001;
+            if (y2[peerID][0] == minY[peerID]) {
+                y2[peerID][0] -= 1;
             }
-            if (l4[0] == minX[peerID]) {
-                l4[0] -= 0.0001;
+            if (x2[peerID][0] == minX[peerID]) {
+                x2[peerID][0] -= 1;
             }
-            if (peerID < x*sqrt_p - dimestimate[peerID] ) {
-
-                if ( (a <= l2[0] && a > l4[0] && b <= l1[0] && b > l3[0]) || (a <= l2[1] && a > l4[1] && b <= l1[1] && b > l3[1]) ) {
+            if (peerID < p[peerID] * q[peerID] - dimestimate[peerID] ) {
+                count++;
+                if ( (a <= x1[peerID][0] && a > x2[peerID][0] && b <= y1[peerID][0] && b > y2[peerID][0]) || (a <= x1[peerID][1] && a > x2[peerID][1] && b <= y1[peerID][1] && b > y2[peerID][1]) ) {
                     it++;
                 } else {
                     projection[peerID].erase(it++);
                 }
             } else {
-                if ( a > l2[0] || a <= l4[0] || b > l1[0] || b <= l3[0]) {
+                if ( a > x1[peerID][0] || a <= x2[peerID][0] || b > y1[peerID][0] || b <= y2[peerID][0]) {
                     projection[peerID].erase(it++);
                 } else {
                     it++;
                 }
             }
         }
-        /*for (int i = 0; i < x; i++) {
-            for (int j = 0; j < sqrt_p; j++) {
-                if (count == peerID || count - dimestimate[peerID] == peerID) {
-                    cout << "x1: " << cursorA << " x2: " << cursorB << endl;
-                }
-                cursorB+=b;
-                if (tempRestB) {
-                    cursorB++;
-                    tempRestB--;
-                }
-                count++;
-            }
-            tempRestB = restB;
-            cursorA += a;
-            if (tempRestA) {
-                cursorA++;
-                tempRestA--;
-            }
-            cursorB = b;
-            if (tempRestB) {
-                cursorB++;
-                tempRestB--;
-            }
-        }*/
-
-        cout << endl;
     }
 
-    /*** Unisco le singole projection di ogni peer***/
+    /*** Unisco le singole projection di ogni peer per verificare correttezza***/
+    int count = 0;
     set<array<int,2>> data;
-    ofstream outfile("merge.csv");
     for(int peerID = 0; peerID < params.peers; peerID++) {
-
-        cout << "dim: " << projection[peerID].size() << endl;
-
+        //cout << "dim: " << projection[peerID].size() << endl;
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-
         it = projection[peerID].begin();
         while (it != projection[peerID].end()) {
-            data.insert(it -> first);
+            //cout << "X: " << (it -> first)[0] << " y: "<<(it -> first)[1] << endl;
             count++;
             it++;
         }
-
-
     }
+
     /*** stampo su file il dataset riunito ed ordinato, per veriicarne la correttezza***/
+    /*ofstream outfile("merge.csv");
     set<array<int,2>>::iterator it2;
     it2 = data.begin();
     while (it2 != data.end()) {
         outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
         it2++;
     }
-    outfile.close();
+    outfile.close();*/
 
 
     cout << "count old : " << old << "\ncount new: " << count << endl;
 
+}
+
+void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
+    int *x1 = new int;
+    int *x2 = new int;
+    int *y1 = new int;
+    int *y2 = new int;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    it = projection.begin();
+    if ((projection.size() %2) != 0) {
+        *minX = (it -> first)[0];  // set as minX the first value
+        *minY = (it -> first)[1];  // set as minY the first value
+        *maxX = (it -> first)[0];  // set as maxX the first value
+        *maxY = (it -> first)[1];  // set as maxY the first value
+        it++;
+    } else {
+        *x1 = (it -> first)[0];
+        *y1 = (it -> first)[1];
+        it++;
+        *x2 = (it -> first)[0];
+        *y2 = (it -> first)[1];
+        it++;
+        *minX = (*x1 <= *x2) ? *x1 : *x2;
+        *maxX = (*x1 <= *x2) ? *x2 : *x1;
+        *minY = (*y1 <= *y2) ? *y1 : *y2;
+        *maxY = (*y1 <= *y2) ? *y2 : *y1;
+    }
+
+    while (it != projection.end()) {
+        *x1 = (it -> first)[0];
+        *y1 = (it -> first)[1];
+        it++;
+        *x2 = (it -> first)[0];
+        *y2 = (it -> first)[1];
+        it++;
+        if (*x1 <= *x2){
+            if ( *x1 < *minX) {
+                *minX = *x1;
+            }
+
+            if ( *x2 > *maxX) {
+                *maxX = *x2;
+            }
+        } else {
+            if ( *x2 < *minX) {
+                *minX = *x2;
+            }
+
+            if ( *x1 > *maxX) {
+                *maxX = *x1;
+            }
+        }
+
+        if (*y1 <= *y2){
+            if ( *y1 < *minY) {
+                *minY = *y1;
+            }
+
+            if ( *y2 > *maxY) {
+                *maxY = *y2;
+            }
+        } else {
+            if ( *y2 < *minY) {
+                *minY = *y2;
+            }
+
+            if ( *y1 > *maxY) {
+                *maxY = *y1;
+            }
+        }
+    }
+}
+
+void getGridSize(int *p, int *q, int peers, int min) {
+    *q = sqrt(peers*min);
+    if ((*q * *q) != peers) {
+        *p = *q+1;
+        *q = ( (*q * (*q+1)) < peers ) ? ++*q : *q;
+    } else {
+        *p = *q;
+    }
 }
 
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double , container_hasher> &projectionInOut){

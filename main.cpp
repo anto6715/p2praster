@@ -716,6 +716,26 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 
 }
 
+void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection) {
+    ofstream outfile(to_string(peerID) +".csv");
+    set<array<int,2>> data;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    set<array<int,2>>::iterator it2;
+    it = projection.begin();
+    while (it != projection.end()) {
+        data.insert(it -> first);
+        it++;
+    }
+
+    it2 = data.begin();
+    while (it2 != data.end()) {
+        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
+        it2++;
+    }
+    outfile.close();
+
+}
+
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
     int *x1 = new int;
     int *x2 = new int;

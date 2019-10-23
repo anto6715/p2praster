@@ -108,12 +108,12 @@ void mapToTiles(double **m, double precision, int threshold, int n, unordered_ma
     }
 } //unordered
 
-void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, int, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
+void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
     int x = coordinate[0];
     int y = coordinate[1];
     int radius = 1;
     int count;
-    unordered_map<array<int, 2>, int, container_hasher>::iterator it;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     unordered_set<array<int, 2>, container_hasher> neighbors;
     unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
 
@@ -132,30 +132,38 @@ void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, int, co
     // if a neighbor is present in tiles, add it in result
     it_neighbor = neighbors.begin();
     for (int i = 0; i < neighbors.size(); i++) {
-        it = projection.find(*it_neighbor);
-        it_neighbor++;
-        if (it != projection.end()) {
+        it = squareProjection.find(*it_neighbor);
+        if (it != squareProjection.end()) {
             result.insert(it -> first);
-            projection.erase(it++);
+            squareProjection.erase(it++);
+        } else {
+            it = projection.find(*it_neighbor);
+            if (it != projection.end()) {
+                result.insert(it -> first);
+                projection.erase(it++);
+            }
         }
+
+
+        it_neighbor++;
     }
 } //unordered
 
-void clusteringTiles(unordered_map<array<int, 2>, int, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
-    unordered_map<array<int, 2>, int, container_hasher>::iterator iterator;
+void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection,unordered_map<array<int, 2>, double , container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
+    unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
 
     // read all tiles
-    while ((iterator = projection.begin()) != projection.end()) {
+    while ((iterator = squareProjection.begin()) != squareProjection.end()) {
         // read and remove first element recursively
         array<int, 2> x = iterator->first;
-        projection.erase(iterator++);
+        squareProjection.erase(iterator++);
 
         unordered_set<array<int, 2>, container_hasher> visited;
         visited.insert(x);
 
         // get neighbors of tile in exam
         unordered_set<array<int, 2>, container_hasher> to_check;
-        getNeighbors(x,projection, to_check);
+        getNeighbors(x, squareProjection, projection, to_check);
 
         // for each neighbor, try to find respectively neighbor in order to add they to single cluster
         while (!to_check.empty()) {
@@ -165,7 +173,7 @@ void clusteringTiles(unordered_map<array<int, 2>, int, container_hasher> &projec
 
             unordered_set<array<int, 2>, container_hasher> temp;
 
-            getNeighbors(value,projection, temp);
+            getNeighbors(value, squareProjection, projection, temp);
             while (!temp.empty()) {
                 to_check.insert(*temp.begin());
                 temp.erase((temp.begin()));
@@ -179,7 +187,8 @@ void clusteringTiles(unordered_map<array<int, 2>, int, container_hasher> &projec
     }
 } // unordered
 
-void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, double precision) {
+void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, double precision, int peerID) {
+    ofstream outfile(to_string(peerID) +".csv");
     cout.precision(10);
     cout <<  "n° cluster: " << clusters.size() << endl;
     unordered_set<array<int, 2>, container_hasher>::iterator it;
@@ -188,14 +197,14 @@ void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clust
 
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
-        cout << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
             count_tiles++; // count the total number of tiles clustered
-            cout << (*it)[0] / scalar << ",";
-            cout << (*it)[1] / scalar << ",";
+            outfile << (*it)[0] / scalar << ",";
+            outfile << (*it)[1] / scalar << ",";
 
-            cout << j << endl;
+            outfile << j << endl;
             it++; // next tile of the actual cluster
         }
     }

@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
     }
     cout<< "sum: " << sum << endl;
     if(sum != ni) {
-        fprintf(stdout, "ERROR: ni = %ld != sum = %ld\n", ni, sum);
+        cerr << "ERROR: ni = "<< ni << "!= sum = " << sum << endl;
         exit(EXIT_FAILURE);
     }
     cout.flush();
@@ -339,8 +339,6 @@ int main(int argc, char **argv) {
     for(int peerID = 0; peerID < params.peers; peerID++){
         cout << "\npeer: " << peerID << endl;
         cout << "start: "<< start << " end: " << peerLastItem[peerID] << endl;
-        //unordered_map<array<int, 2>, int, container_hasher> projection;
-        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
 
         /*** points agglomeration ***/
         // Raster version
@@ -526,13 +524,13 @@ int main(int argc, char **argv) {
         if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
             squares[peerID]++;
         }
-        i =(int*) malloc(squares[peerID] * sizeof(int));
-        j =(int*) malloc(squares[peerID] * sizeof(int));
+        i = new int[squares[peerID]];
+        j = new int[squares[peerID]];
 
-        y1[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
-        x1[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
-        y2[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
-        x2[peerID] =(int*) malloc(squares[peerID] * sizeof(int));
+        y1[peerID] = new int[squares[peerID]];
+        x1[peerID] = new int[squares[peerID]];
+        y2[peerID] = new int[squares[peerID]];
+        x2[peerID] = new int[squares[peerID]];
 
 
         for (int k = 0; k < squares[peerID]; k++) {
@@ -551,7 +549,18 @@ int main(int argc, char **argv) {
                 x2[peerID][k] -= 1;
             cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
         }
+        delete[] i;
+        delete[] j;
     }
+
+    delete[] p;
+    delete[] q;
+    delete[] squares;
+    free(minX);
+    free(minY);
+    free(maxX);
+    free(maxY);
+
     /*** Each peer find the tiles in own square(s)***/
     unordered_map<array<int, 2>, double, container_hasher> *squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
     for(int peerID = 0; peerID < params.peers; peerID++) {
@@ -575,6 +584,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    for(int peerID = 0; peerID < params.peers; peerID++) {
+        delete[] x1[peerID];
+        delete[] y1[peerID];
+        delete[] x2[peerID];
+        delete[] y2[peerID];
+    }
+
+    delete[] x1;
+    delete[] y1;
+    delete[] x2;
+    delete[] y2;
+
     if (!outputOnFile) {
         cout <<"\nStarting local clustering..." << endl;
     }
@@ -585,6 +606,14 @@ int main(int argc, char **argv) {
     for(int peerID = 0; peerID < params.peers; peerID++) {
         clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
     }
+
+
+    for(int peerID = 0; peerID < params.peers; peerID++) {
+        projection[peerID].clear();
+        squareProjection[peerID].clear();
+    }
+    delete[] projection;
+    delete[] squareProjection;
 
     double clustertime = StopTheClock();
     if (!outputOnFile) {
@@ -617,7 +646,6 @@ int main(int argc, char **argv) {
 
         for(int peerID = 0; peerID < params.peers; peerID++){
             // check peer convergence
-
 
             // determine peer neighbors
             igraph_vector_t neighbors;
@@ -716,26 +744,6 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 
 }
 
-void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection) {
-    ofstream outfile(to_string(peerID) +".csv");
-    set<array<int,2>> data;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    set<array<int,2>>::iterator it2;
-    it = projection.begin();
-    while (it != projection.end()) {
-        data.insert(it -> first);
-        it++;
-    }
-
-    it2 = data.begin();
-    while (it2 != data.end()) {
-        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
-        it2++;
-    }
-    outfile.close();
-
-}
-
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
     int *x1 = new int;
     int *x2 = new int;
@@ -805,6 +813,11 @@ void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &
             }
         }
     }
+
+    delete x1;
+    delete y1;
+    delete x2;
+    delete y2;
 }
 
 void getGridSize(int *p, int *q, int peers, int min) {
@@ -820,13 +833,10 @@ void getGridSize(int *p, int *q, int peers, int min) {
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double , container_hasher> &projectionInOut){
     unordered_map<array<int, 2>, double, container_hasher>::iterator itIn;
     unordered_map<array<int, 2>, double , container_hasher>::iterator itInOut;
-    double *temp = new double[1];
     itIn = projectionIn.begin();
     while (itIn != projectionIn.end()) {
         itInOut = projectionInOut.find(itIn -> first);
-        array<int, 2> tile = itIn -> first;
         if (itInOut != projectionInOut.end()) {
-            *temp = itInOut -> second;
             average( &itInOut->second, &itIn->second);
             memcpy(&itIn->second, &itInOut->second, sizeof(double));
         } else {
@@ -856,15 +866,6 @@ void clusterMerge(vector<unordered_set<array<int, 2>, container_hasher>> &cluste
                     equals = 1;
                     break;
                 }
-                /*for (int m = 0; m <clustersInOut.at(l).size() ; m++) {
-                    if ( (*it1) == (*it2)) {
-                        notCopy.insert(l);
-                        equals = 1;
-                        it2++;
-                        break;
-                    }
-                    it2++;
-                }*/
             }
         }
         if (!equals) {
@@ -883,6 +884,7 @@ void clusterMerge(vector<unordered_set<array<int, 2>, container_hasher>> &cluste
         }
 
     }
+    notCopy.clear();
 
 
 }

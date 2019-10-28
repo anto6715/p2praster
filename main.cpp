@@ -67,15 +67,15 @@ int main(int argc, char **argv) {
     long        *peerLastItem; // index of a peer last item
     uint32_t    domainSize = 1048575; // number of possible distinct items
     int         peers = 10; // number of peers
-    int         fanOut = 4; //fan-out of peers
-    int         graphType = 3; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
+    int         fanOut = 3; //fan-out of peers
+    int         graphType = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
     double      convThreshold = 0.00001; // local convergence tolerance
     int         convLimit = 3; // number of consecutive rounds in which a peer must locally converge
     int         roundsToExecute = -1;
     int         p_star = -1;
     double      delta = 0.04;
     double      precision = -4.2;
-    int         threshold = 3;
+    int         threshold = 2;
     int         min_size = 3;
     int         radius = 0;
     string      name_file = "/home/antonio/Scrivania/Datasets/S-sets/s1.csv";
@@ -621,10 +621,14 @@ int main(int argc, char **argv) {
     for(int i = 0; i < params.peers; i++)
         clustersestimate[i] = (double )clusters[i].size();
 
-    for(int i = 0; i < params.peers; i++)
+    // Reinitialize some parameters
+    for(int i = 0; i < params.peers; i++){
         converged[i] = false;
+        convRounds[i] = 0;
+    }
 
-    rounds =0;
+
+    rounds = 0;
 
     params.roundsToExecute = roundsToExecute;
     Numberofconverged = params.peers;
@@ -677,7 +681,7 @@ int main(int argc, char **argv) {
 
                 bool clustersestimateconv;
                 if(prevclustersestimate[peerID])
-                    clustersestimateconv = fabs((prevclustersestimate[peerID] - clustersestimate[peerID]) / prevclustersestimate[peerID]) < params.convThreshold;
+                    clustersestimateconv = fabs((prevclustersestimate[peerID] - clustersestimate[peerID])) == 0;
                 else
                     clustersestimateconv = false;
 
@@ -712,7 +716,14 @@ int main(int argc, char **argv) {
         cout << "\npeer: " << peerID << endl;
         printClusters(clusters[peerID], params.precision, peerID);
     }
-    
+    cout << "\n\n";
+
+    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
+    unordered_map<array<int, 2>, double, container_hasher> proj;
+    mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
+    printAllPointsClustered(clusters[0], all_points);
+
+
     delete[] dimestimate;
     delete[] peerLastItem;
     delete[] converged;
@@ -746,10 +757,10 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 }
 
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
-    int *x1 = new int;
-    int *x2 = new int;
-    int *y1 = new int;
-    int *y2 = new int;
+    auto x1 = new int;
+    auto x2 = new int;
+    auto y1 = new int;
+    auto y2 = new int;
     unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     it = projection.begin();
     if ((projection.size() %2) != 0) {  // odd case
@@ -936,12 +947,12 @@ igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius)
     igraph_bool_t connected;
 
     // generate a connected random graph using the geometric model
-    igraph_grg_game(&G_graph, n, radius, 0, 0, 0);
+    igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
 
     igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&G_graph);
-        igraph_grg_game(&G_graph, n, radius, 0, 0, 0);
+        igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
 
         igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     }

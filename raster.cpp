@@ -21,16 +21,15 @@ void hash_combine(std::size_t& seed, std::size_t value) {
 void mapToTilesPrime(   double **m,
                         double precision,
                         int threshold,
-                        unordered_map<array<int, 2>, int, container_hasher> &projection,
-                        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points,
-                        int start,
-                        int end) {
+                        int n,
+                        unordered_map<array<int, 2>, double, container_hasher> &projection,
+                        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points) {
     double scalar;
-    unordered_map<array<int, 2>, int, container_hasher>::iterator it;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
     scalar = pow(10, precision);
     int lat, lon;
-    for (int i = start; i <= end; i++) {
+    for (int i = 0; i < n; i++) {
         lat =(int) (m[i][0] * scalar);
         lon =(int) (m[i][1] * scalar);
         array<int, 2> tile = {lat,lon};
@@ -188,7 +187,7 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
 } // unordered
 
 void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, double precision, int peerID) {
-    ofstream outfile(to_string(peerID) +".csv");
+    //ofstream outfile(to_string(peerID) +".csv");
     cout.precision(10);
     cout <<  "n° cluster: " << clusters.size() << endl;
     unordered_set<array<int, 2>, container_hasher>::iterator it;
@@ -197,14 +196,14 @@ void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clust
 
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
-        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        //outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
             count_tiles++; // count the total number of tiles clustered
-            outfile << (*it)[0] / scalar << ",";
-            outfile << (*it)[1] / scalar << ",";
+            //outfile << (*it)[0] / scalar << ",";
+            //outfile << (*it)[1] / scalar << ",";
 
-            outfile << j << endl;
+            //outfile << j << endl;
             it++; // next tile of the actual cluster
         }
     }

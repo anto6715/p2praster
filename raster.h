@@ -37,7 +37,7 @@ int getDim(const string& name_file, int &row, int &column);
 // unordered
 void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result);
 
-void mapToTiles(double **m, double precision, int threshold, unordered_map<array<int, 2>, int, container_hasher> &projection, int start, int end);
+void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result);
 
 void mapToTilesNoThreshold(double **m, double precision, int threshold, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end);
 
@@ -45,9 +45,15 @@ void mapToTilesPrime(double **m, double precision, int threshold, int n, unorder
 
 void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters);
 
+void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters);
+
 void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, double precision, int peerID = 0);
 
+void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, double precision, int peerID = 0);
+
 void printAllPointsClustered(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+
+void printAllPointsClustered(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
 
 void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, double precision);// raster'
 

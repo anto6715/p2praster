@@ -4,7 +4,7 @@
 #include <random>
 #include "raster.h"
 
-void clusterMerge(vector<unordered_set<array<int, 2>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 2>, container_hasher>> &clustersInOut);
+void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut);
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY);
 void getGridSize(int *p, int * q, int peers, int min);
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     int         threshold = 2;
     int         min_size = 3;
     int         radius = 0;
-    string      name_file = "/home/antonio/Scrivania/Datasets/S-sets/s1.csv";
+    string      name_file = "../Datasets/S-sets/s1.csv";
 
     double          elapsed;
     int             iterations;
@@ -597,7 +597,7 @@ int main(int argc, char **argv) {
     StartTheClock();
 
     /***Each peer clustering its own tiles ***/
-    auto *clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
+    auto *clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
     for(int peerID = 0; peerID < params.peers; peerID++) {
         clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
     }
@@ -862,11 +862,11 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
 
 }
 
-void clusterMerge(vector<unordered_set<array<int, 2>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 2>, container_hasher>> &clustersInOut) {
+void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut) {
     int equals;
     set<int> notCopy; // indexes of common clusters
-    unordered_set<array<int, 2>, container_hasher>::iterator it1;
-    unordered_set<array<int, 2>, container_hasher>::iterator it2;
+    unordered_set<array<int, 3>, container_hasher>::iterator it1;
+    unordered_set<array<int, 3>, container_hasher>::iterator it2;
     int check = clustersInOut.size();
     for (auto & k : clustersIn) {
         equals = 0;

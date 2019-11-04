@@ -4,7 +4,9 @@
 #include <random>
 #include "raster.h"
 
-void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut);
+int manhattanDistance(int x1, int x2, int y1, int y2);
+void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, vector<array<int, 2>> &centroids);
+void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut, vector<array<int, 2>> &centroidsIn, vector<array<int, 2>> &centroidsInOut);
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY);
 void getGridSize(int *p, int * q, int peers, int min);
@@ -495,7 +497,7 @@ int main(int argc, char **argv) {
     auto p = new int[params.peers];
     // how much square for each peer ( if p*q % peers != 0 some peers will have one more square)
     auto squares = new int[params.peers];
-    int min =2; // set as input parameter?
+    int min =1; // set as input parameter?
     // initial hypothesis
     for (int i = 0; i < params.peers; i++) {
         squares[i] = min;
@@ -512,7 +514,7 @@ int main(int argc, char **argv) {
         b =     (maxX[peerID]-minX[peerID]) / p[peerID];
         restA = (maxY[peerID]-minY[peerID]) % q[peerID];
         restB = (maxX[peerID]-minX[peerID]) % p[peerID];
-        //cout << "peer: " << peerID << endl;
+        cout << "peer: " << peerID << endl;
 
         // i, j coordinate in grid p*q,
         int *i, *j;
@@ -542,7 +544,7 @@ int main(int argc, char **argv) {
 
             if (x2[peerID][k] == minX[peerID])
                 x2[peerID][k] -= 1;
-            //cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
+            cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
         }
         delete[] i;
         delete[] j;
@@ -550,7 +552,7 @@ int main(int argc, char **argv) {
 
     delete[] p;
     delete[] q;
-    delete[] squares;
+
     free(minX);
     free(minY);
     free(maxX);
@@ -579,6 +581,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    delete[] squares;
+
     for(int peerID = 0; peerID < params.peers; peerID++) {
         delete[] x1[peerID];
         delete[] y1[peerID];
@@ -596,10 +600,15 @@ int main(int argc, char **argv) {
     }
     StartTheClock();
 
-    /***Each peer clustering its own tiles ***/
+
+    /***Each peer clustering its own tiles and calculate centroids of clusters***/
     auto *clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
+    auto centroids = new vector<array<int, 2>>[params.peers];
     for(int peerID = 0; peerID < params.peers; peerID++) {
         clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
+        getCentroids(clusters[peerID], centroids[peerID]);
+        cout<<"peer: " << peerID << " cluster: " << clusters[peerID].size() << ", centroidi: " << centroids[peerID].size() << endl;
+
     }
 
 
@@ -627,16 +636,18 @@ int main(int argc, char **argv) {
         convRounds[i] = 0;
     }
 
-
+    // reinitialize some parameters
     rounds = 0;
-
     params.roundsToExecute = roundsToExecute;
     Numberofconverged = params.peers;
+
 
 
     if (!outputOnFile) {
         cout <<"\nStarting distributed merge of clusters..." << endl;
     }
+
+
     StartTheClock();
     /*** Start distributed cluster merge***/
     while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
@@ -663,7 +674,11 @@ int main(int argc, char **argv) {
                 igraph_integer_t edgeID;
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
 
-                clusterMerge(clusters[neighborID], clusters[peerID]);
+
+
+                clusterMerge(clusters[neighborID], clusters[peerID], centroids[neighborID], centroids[peerID]);
+                //getCentroids(clusters[peerID], centroids[peerID]);
+                //getCentroids(clusters[neighborID], centroids[neighborID]);
                 clustersestimate[peerID] = (double) clusters[peerID].size();
                 clustersestimate[neighborID] = (double) clusters[neighborID].size();
 
@@ -723,7 +738,6 @@ int main(int argc, char **argv) {
     mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
     printAllPointsClustered(clusters[0], all_points);
 
-
     delete[] dimestimate;
     delete[] peerLastItem;
     delete[] converged;
@@ -733,6 +747,36 @@ int main(int argc, char **argv) {
     delete[] prevclustersestimate;
     delete[] convRounds;
     delete[] datasetsizeestimate;
+
+}
+
+
+int manhattanDistance(int x1, int x2, int y1, int y2) {
+    return abs(x1-x2) + abs(y1-y2);
+}
+
+void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, vector<array<int, 2>> &centroids) {
+    centroids.clear();
+    unordered_set<array<int, 3>, container_hasher>::iterator it_tiles;
+    double n;
+    double x, y;
+
+    /************ for each cluster in clusters ************/
+    for (int j = 0; j < clusters.size(); j++) {
+        //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
+        n = 0;
+        x = 0;
+        y = 0;
+        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+        /************ for each tile in cluster j-th ************/
+        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
+            x += (*it_tiles)[0]*(*it_tiles)[2];
+            y += (*it_tiles)[1]*(*it_tiles)[2];
+            n += (*it_tiles)[2];
+            it_tiles++;
+        }
+        centroids.push_back({(int) (x/n), (int) (y/n)});
+    }
 
 }
 
@@ -842,7 +886,7 @@ void getGridSize(int *p, int *q, int peers, int min) {
     }
 }
 
-void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double , container_hasher> &projectionInOut){
+void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionIn, unordered_map<array<int, 2>, double, container_hasher> &projectionInOut){
     unordered_map<array<int, 2>, double, container_hasher>::iterator itIn;
     unordered_map<array<int, 2>, double , container_hasher>::iterator itInOut;
     itIn = projectionIn.begin();
@@ -862,42 +906,39 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
 
 }
 
-void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut) {
-    int equals;
-    set<int> notCopy; // indexes of common clusters
-    unordered_set<array<int, 3>, container_hasher>::iterator it1;
-    unordered_set<array<int, 3>, container_hasher>::iterator it2;
-    int check = clustersInOut.size();
-    for (auto & k : clustersIn) {
-        equals = 0;
+void clusterMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersIn, vector<unordered_set<array<int, 3>, container_hasher>> &clustersInOut, vector<array<int, 2>> &centroidsIn, vector<array<int, 2>> &centroidsInOut) {
+    auto notCopyInOut = new int[centroidsInOut.size()]();
+    auto notCopyIn = new int[centroidsIn.size()]();
+    int check = centroidsInOut.size(); // get the actual dimension because it will increase but we are not interested at the clusters that will be added
+    for (int k = 0; k < centroidsIn.size(); k++) {
         for (int l = 0; l < check; l++) {
-            if (k.size() == clustersInOut.at(l).size()) {
-                it1 = k.begin();
-                if ( clustersInOut.at(l).find(*it1) != clustersInOut.at(l).end()) {
-                    notCopy.insert(l);
-                    equals = 1;
+                if (  manhattanDistance(centroidsIn.at(k)[0], centroidsInOut.at(l)[0], centroidsIn.at(k)[1], centroidsInOut.at(l)[1]) == 0) {
+                    if (clustersInOut.at(l).size() >= clustersIn.at(k).size()) {
+                        clustersInOut.at(l).operator=(clustersIn.at(k));
+                    } else {
+                        clustersIn.at(k).operator=(clustersInOut.at(l));
+                    }
+                    notCopyInOut[l] = 1;
+                    notCopyIn[k] = 1;
                     break;
                 }
-            }
-        }
-        if (!equals) {
-            clustersInOut.push_back(k);
         }
     }
-    if (notCopy.empty()) {
-        for (int l = 0; l < check; l++) {
+
+    for (int k = 0; k < clustersIn.size(); k++) {
+        if (!notCopyIn[k]) {
+            clustersInOut.push_back(clustersIn.at(k));
+            centroidsInOut.push_back({centroidsIn.at(k)[0], centroidsIn.at(k)[1]});
+        }
+    }
+    for (int l = 0; l < check; l++) {
+        if (!notCopyInOut[l]) {
             clustersIn.push_back(clustersInOut.at(l));
+            centroidsIn.push_back({centroidsInOut.at(l)[0], centroidsInOut.at(l)[1]});
         }
-    } else {
-        for (int l = 0; l < check; l++) {
-            if (notCopy.find(l) == notCopy.end()) {
-                clustersIn.push_back(clustersInOut.at(l));
-            }
-        }
-
     }
-    notCopy.clear();
-
+    delete[] notCopyInOut;
+    delete[] notCopyIn;
 
 }
 

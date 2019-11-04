@@ -69,9 +69,9 @@ int main(int argc, char **argv) {
     long        *peerLastItem; // index of a peer last item
     uint32_t    domainSize = 1048575; // number of possible distinct items
     int         peers = 10; // number of peers
-    int         fanOut = 3; //fan-out of peers
-    int         graphType = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
-    double      convThreshold = 0.00001; // local convergence tolerance
+    int         fanOut = 5; //fan-out of peers
+    int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
+    double      convThreshold = 0.0001; // local convergence tolerance
     int         convLimit = 3; // number of consecutive rounds in which a peer must locally converge
     int         roundsToExecute = -1;
     int         p_star = -1;
@@ -389,7 +389,7 @@ int main(int argc, char **argv) {
             igraph_vector_init(&neighbors, 0);
             igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
             long neighborsSize = igraph_vector_size(&neighbors);
-            if(fanOut < neighborsSize){
+            if(fanOut < neighborsSize && fanOut != -1){
                 // randomly sample f adjacent vertices
                 igraph_vector_shuffle(&neighbors);
                 igraph_vector_remove_section(&neighbors, params.fanOut, neighborsSize);
@@ -514,7 +514,7 @@ int main(int argc, char **argv) {
         b =     (maxX[peerID]-minX[peerID]) / p[peerID];
         restA = (maxY[peerID]-minY[peerID]) % q[peerID];
         restB = (maxX[peerID]-minX[peerID]) % p[peerID];
-        cout << "peer: " << peerID << endl;
+        //cout << "peer: " << peerID << endl;
 
         // i, j coordinate in grid p*q,
         int *i, *j;
@@ -544,7 +544,7 @@ int main(int argc, char **argv) {
 
             if (x2[peerID][k] == minX[peerID])
                 x2[peerID][k] -= 1;
-            cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
+            //cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
         }
         delete[] i;
         delete[] j;
@@ -662,7 +662,7 @@ int main(int argc, char **argv) {
             igraph_vector_init(&neighbors, 0);
             igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
             long neighborsSize = igraph_vector_size(&neighbors);
-            if(fanOut < neighborsSize){
+            if(fanOut < neighborsSize && fanOut != -1){
                 // randomly sample f adjacent vertices
                 igraph_vector_shuffle(&neighbors);
                 igraph_vector_remove_section(&neighbors, params.fanOut, neighborsSize);
@@ -677,8 +677,6 @@ int main(int argc, char **argv) {
 
 
                 clusterMerge(clusters[neighborID], clusters[peerID], centroids[neighborID], centroids[peerID]);
-                //getCentroids(clusters[peerID], centroids[peerID]);
-                //getCentroids(clusters[neighborID], centroids[neighborID]);
                 clustersestimate[peerID] = (double) clusters[peerID].size();
                 clustersestimate[neighborID] = (double) clusters[neighborID].size();
 

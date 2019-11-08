@@ -89,8 +89,8 @@ void getGridSize(int *p, int * q, int peers, int min);
  * If a tiles is present in an only structure, it value is divides by 2 and the tile
  * is copies also in the other structure.
  *
- * @param projectionN - Data structure with peer tiles
- * @param projectionP - Data structure with  peer neighbor tiles
+ * @param projectionN - Data structure with peer neighbor tiles
+ * @param projectionP - Data structure with  peer tiles
  * @result Save into projectionP and projectionN their union, update cardinality of each tiles with the average cardinality
  */
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionN, unordered_map<array<int, 2>, double, container_hasher> &projectionP);
@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
     long        ni; // points number
     long        *peerLastItem; // index of a peer last item
     int         peers = 10; // number of peers
-    int         fanOut = 5; //fan-out of peers
+    int         fanOut = 3; //fan-out of peers
     int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
     double      convThreshold = 0.0001; // local convergence tolerance
     int         convLimit = 3; // number of consecutive rounds in which a peer must locally converge
@@ -875,7 +875,7 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            printClusters(clusters[peerID], peerID);
+            genericPrintClusters(clusters[peerID], peerID);
         }
         cout << "\n\n";
 
@@ -915,7 +915,7 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            printClusters(clusters[peerID], peerID);
+            genericPrintClusters(clusters[peerID], peerID);
         }
         cout << "\n\n";
 
@@ -936,6 +936,7 @@ int main(int argc, char **argv) {
 
 
 }
+
 
 
 int manhattanDistance(int x1, int x2, int y1, int y2) {
@@ -966,6 +967,7 @@ void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &cluste
 
 }
 
+//remove
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection) {
     ofstream outfile(to_string(peerID) +".csv");
     set<array<int,2>> data;
@@ -987,10 +989,10 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 }
 
 void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
-    auto x1 = new int;
-    auto x2 = new int;
-    auto y1 = new int;
-    auto y2 = new int;
+    int x1;
+    int x2;
+    int y1;
+    int y2;
     unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     it = projection.begin();
     if ((projection.size() %2) != 0) {  // odd case
@@ -1000,95 +1002,116 @@ void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &
         *maxY = (it -> first)[1];  // set as maxY the first value
         it++;
     } else {                            // even case
-        *x1 = (it -> first)[0];
-        *y1 = (it -> first)[1];
+        x1 = (it -> first)[0];
+        y1 = (it -> first)[1];
         it++;
-        *x2 = (it -> first)[0];
-        *y2 = (it -> first)[1];
+        x2 = (it -> first)[0];
+        y2 = (it -> first)[1];
         it++;
-        *minX = (*x1 <= *x2) ? *x1 : *x2;
-        *maxX = (*x1 <= *x2) ? *x2 : *x1;
-        *minY = (*y1 <= *y2) ? *y1 : *y2;
-        *maxY = (*y1 <= *y2) ? *y2 : *y1;
+        *minX = (x1 <= x2) ? x1 : x2;
+        *maxX = (x1 <= x2) ? x2 : x1;
+        *minY = (y1 <= y2) ? y1 : y2;
+        *maxY = (y1 <= y2) ? y2 : y1;
     }
 
     while (it != projection.end()) {
-        *x1 = (it -> first)[0];
-        *y1 = (it -> first)[1];
+        x1 = (it -> first)[0];
+        y1 = (it -> first)[1];
         it++;
-        *x2 = (it -> first)[0];
-        *y2 = (it -> first)[1];
+        x2 = (it -> first)[0];
+        y2 = (it -> first)[1];
         it++;
-        if (*x1 <= *x2){
-            if ( *x1 < *minX) {
-                *minX = *x1;
+        // on coordinate x
+        if (x1 <= x2){
+            if ( x1 < *minX) {
+                *minX = x1;
             }
 
-            if ( *x2 > *maxX) {
-                *maxX = *x2;
+            if ( x2 > *maxX) {
+                *maxX = x2;
             }
         } else {
-            if ( *x2 < *minX) {
-                *minX = *x2;
+            if ( x2 < *minX) {
+                *minX = x2;
             }
 
-            if ( *x1 > *maxX) {
-                *maxX = *x1;
+            if ( x1 > *maxX) {
+                *maxX = x1;
             }
         }
-
-        if (*y1 <= *y2){
-            if ( *y1 < *minY) {
-                *minY = *y1;
+        // on coordinate y
+        if (y1 <= y2){
+            if ( y1 < *minY) {
+                *minY = y1;
             }
 
-            if ( *y2 > *maxY) {
-                *maxY = *y2;
+            if ( y2 > *maxY) {
+                *maxY = y2;
             }
         } else {
-            if ( *y2 < *minY) {
-                *minY = *y2;
+            if ( y2 < *minY) {
+                *minY = y2;
             }
 
-            if ( *y1 > *maxY) {
-                *maxY = *y1;
+            if ( y1 > *maxY) {
+                *maxY = y1;
             }
         }
     }
-
-    delete x1;
-    delete y1;
-    delete x2;
-    delete y2;
 }
 
 void getGridSize(int *p, int *q, int peers, int min) {
     *q = sqrt(peers*min);
-    if ((*q * *q) != peers) {
-        *p = *q+1;
+    if ((*q * *q) != peers*min) { // check if peers*min is a perfect square
+        *p = *q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
         *q = *q * (*q + 1) < peers ? ++*q : *q;
     } else {
         *p = *q;
     }
 }
-
+/**
+ * First while find common tiles between two projection and compute the average cardianlity,
+ * furthermore add into projectionP the tiles that are present only in projectionN, in this
+ * case the cardinality is divided by 2.
+ * The second while instead find all the tiles that are present in projectionP but not in projectionN
+ * and add to it. Also in this case the cardinality is divided by 2.
+ */
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionN, unordered_map<array<int, 2>, double, container_hasher> &projectionP){
-    unordered_map<array<int, 2>, double, container_hasher>::iterator itIn;
-    unordered_map<array<int, 2>, double , container_hasher>::iterator itInOut;
-    itIn = projectionN.begin();
-    while (itIn != projectionN.end()) {
-        itInOut = projectionP.find(itIn -> first);
-        if (itInOut != projectionP.end()) {
-            average( &itInOut->second, &itIn->second);
-            memcpy(&itIn->second, &itInOut->second, sizeof(double));
+    unordered_map<array<int, 2>, double, container_hasher>::iterator itN;
+    unordered_map<array<int, 2>, double , container_hasher>::iterator itP;
+
+    itN = projectionN.begin();
+    while (itN != projectionN.end()) {
+        itP = projectionP.find(itN -> first);
+        if (itP != projectionP.end()) { // tile is common
+            average(&itP->second, &itN->second);
+            memcpy(&itN->second, &itP->second, sizeof(double));
         } else {
-            projectionP[itIn -> first] = (itIn->second) / 2.0;
-            average(&itIn->second, nullptr);
+            projectionP[itN -> first] = (itN->second) / 2.0;
+            average(&itN->second, nullptr);
         }
-        itIn++;
+        itN++;
+    }
+    itP = projectionP.begin();
+    while (itP != projectionP.end()) {
+        itN = projectionP.find(itP -> first);
+        if (itN == projectionN.end()) {
+            projectionN[itP -> first] = (itP->second) / 2.0;
+            average(&itP->second, nullptr);
+        }
+        itP++;
     }
 }
-
+/**
+ * This function use an hashmap to merge in linear time 2 clusters with dimension m and n.
+ * A naive method check all m tiles of first cluster with all n tiles of second clusters
+ * with a complexity O(n*m) in worst case.
+ * If we assume that we can insert and find an element in the hashmap in time O(1),
+ * the first for cycle insert in time O(m) all tiles using as key only the coordinate.
+ * The second for cycle try to find the n tiles into the hashmap, it will cost O(n).
+ * If is not present add it to the hashmap, also in this case the add operation
+ * in the worst case will be O(n).
+ */
 void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unordered_set<array<int, 3>, container_hasher> &clusterP) {
     unordered_set<array<int, 3>, container_hasher>::iterator itN = clusterN.begin();
     unordered_set<array<int, 3>, container_hasher>::iterator itP = clusterP.begin();
@@ -1117,11 +1140,25 @@ void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unor
     clusterP.operator=(s);
     clusterN.operator=(s);
 }
-
+/**
+ * The double for cycle find all common cluster and set to 1 the correspondent index
+ * into notCopy structure. For example if the k-th cluster of clusterN is equal at the
+ * l-th clusterP, then notCopyN[k] and notCopyP[l] will be set to 1.
+ * In this way the nex for cycle using these information will copy only the cluster
+ * that are not common.
+ */
 void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersN, vector<unordered_set<array<int, 3>, container_hasher>> &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance) {
-    auto notCopyP = new int[centroidsP.size()]();
-    auto notCopyN = new int[centroidsN.size()]();
-    int tmpSize = centroidsP.size(); // get the actual dimension because it will increase but we are not interested at the clusters that will be added
+    int *notCopyP;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterP is also present in clusterN */
+    int *notCopyN;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterN is also present in clusterP */
+    try {
+        notCopyP = new int[centroidsP.size()]();
+        notCopyN = new int[centroidsN.size()]();
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
+
+    int tmpSize = centroidsP.size(); // get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
     for (int k = 0; k < centroidsN.size(); k++) {
         for (int l = 0; l < tmpSize; l++) {
             if (manhattanDistance(centroidsN.at(k)[0], centroidsP.at(l)[0], centroidsN.at(k)[1], centroidsP.at(l)[1]) <= maxDistance) {

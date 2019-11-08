@@ -43,6 +43,20 @@ struct container_hasher {
 };
 
 /**
+ * THis function use template in order to use an only function to print both type of cluster
+ * that can be used in the two different type of algorithm in the main function. This function
+ * can take as argument both type of cluster and print on terminal the number of clusters,
+ * the number of tiles clustered and print on a csv each cluster with correspondent tiles.
+ *
+ * @tparam T - Type of clsuter, can be: nordered_set<array<int, 3>, container_hasher> or nordered_set<array<int, 2>, container_hasher>
+ * @param [in] c - Data structure which contains clusters to print
+ * @param [in] peerID - Peer id that want to write on file
+ */
+template <typename T>
+void genericPrintClusters(vector<T> &c, int peerID);
+
+
+/**
  *
  * @param [in] name_file - The input file name
  * @param [in,out] row - Number of csv rows
@@ -137,12 +151,12 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &pro
 void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters);
 
 /**
- * this function print on terminal the total number of tiles clsutered,
- * if outputOnFile = true print also information about cluster and their
+ * this function print on terminal the total number of tiles clustered,
+ * Print also information about cluster and their
  * tiles in a csv file name with peerId.csv
  *
  * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] peerID - (optional) Peer id that wnat to write on file
+ * @param [in] peerID - (optional) Peer id that want to write on file
  */
 void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
 
@@ -151,7 +165,7 @@ void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clust
  * here clusters maintain information about tiles cardinality
  *
  * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] peerID - (optional) Peer id that wnat to write on file
+ * @param [in] peerID - (optional) Peer id that want to write on file
  */
 void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
 
@@ -182,6 +196,7 @@ void printAllPointsClustered(vector<unordered_set<array<int, 3>, container_hashe
  * @result Print on terminal the mean Shannon entropy and mean Density for each cluster
  */
 void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, double precision);// raster'
+
 
 
 #endif //P2PRASTER_RASTER_H

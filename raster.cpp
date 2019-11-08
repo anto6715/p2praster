@@ -333,6 +333,7 @@ void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clust
 
 }
 
+
 void printAllPointsClustered(   vector<unordered_set<array<int, 3>, container_hasher>> &clusters,
                                 unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
     cout.precision(15);
@@ -460,6 +461,36 @@ void printAllPointsClustered(   vector<unordered_set<array<int, 2>, container_ha
     cout << "Points clustered: " << count_points << endl;
     cout << "Points anallized: " << count_points + count_not_clustered << endl;
 }
+
+// under the function there are the two variants of T type
+template <typename T>
+void genericPrintClusters(vector<T> &clusters, int peerID) {
+    ofstream outfile(to_string(peerID) +".csv");
+    cout <<  "n° cluster: " << clusters.size() << endl;
+    typename T::iterator it;
+
+    int count_tiles = 0;
+    for (int j = 0; j < clusters.size(); j++) {
+        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
+        for (int i = 0; i < clusters.at(j).size(); i++) {
+            count_tiles++; // count the total number of tiles clustered
+            outfile << (*it)[0] << ",";
+            outfile << (*it)[1] << ",";
+            outfile << j << endl;
+            it++; // next tile of the actual cluster
+        }
+    }
+    outfile.close();
+    cout << "Tiles clustered: " << count_tiles << endl;
+
+}
+/**
+ * These declarations are necessary for compiler in order to correctly link
+ * the header of a function with its implementation in presence of a template
+ */
+template void genericPrintClusters<unordered_set<array<int, 3>, container_hasher>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
+template void genericPrintClusters<unordered_set<array<int, 2>, container_hasher>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
 
 void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters,
                     unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points,

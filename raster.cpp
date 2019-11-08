@@ -1,12 +1,9 @@
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <cmath>
 #include <map>
 #include <cstring>
-#include <boost/functional/hash.hpp>
 #include <unordered_map>
-#include <chrono>
 #include <unordered_set>
 #include "raster.h"
 
@@ -17,7 +14,159 @@ void hash_combine(std::size_t& seed, std::size_t value) {
     seed ^= value + 0x9e3779b9 + (seed<<6) + (seed>>2);
 }
 
-// raster'
+int getDim(string name_file, int &row, int &column) {
+    // Initialization
+    row = 0;
+    column = 0;
+    ifstream inputFile(name_file);
+    while (inputFile) {
+        string s;
+        if (!getline(inputFile, s)) break;
+        if (row == 0) {
+            istringstream ss(s);
+            while (ss) {
+                string line;
+                if (!getline(ss, line, ','))
+                    break;
+                column++;
+            }
+        }
+        row++;
+    }
+    if (!inputFile.eof()) {
+        cerr << "Could not read file " << name_file << "\n";
+        //__throw_invalid_argument("File not found.");
+        return -1;
+    }
+    return 0;
+}
+
+int loadData(double **m, string name_file, int column) {
+    ifstream inputFile(name_file);
+    int row = 0;
+    while (inputFile) {
+        string s;
+        if (!getline(inputFile, s)) break;
+        if (s[0] != '#') {
+            istringstream ss(s);
+            while (ss) {
+                for (int i = 0; i < column; i++) {
+                    string line;
+                    if (!getline(ss, line, ','))
+                        break;
+                    try {
+                        m[row][i] = stod(line);
+                    }
+                    catch (const std::invalid_argument &e) {
+                        cout << "NaN found in file " << name_file << " line " << row
+                             << endl;
+                        e.what();
+                    }
+                }
+            }
+        }
+        row++;
+    }
+    if (!inputFile.eof()) {
+        cerr << "Could not read file " << name_file << "\n";
+        //__throw_invalid_argument("File not found.");
+        return -1;
+    }
+    return 0;
+}
+
+void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
+    int x = coordinate[0];
+    int y = coordinate[1];
+    int radius = 1;
+    int count;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    unordered_set<array<int, 2>, container_hasher> neighbors;
+    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
+
+    // neighboring generation of coordinate
+    count = 0;
+    for (int i = -radius; i <= radius ; i++) {
+        for (int j = -radius; j <= radius ; j++) {
+            if (i == 0 && j == 0)
+                continue;
+            neighbors.insert({x + i, y + j});
+            count++;
+
+        }
+    }
+
+    // if a neighbor is present in tiles, add it in result
+    it_neighbor = neighbors.begin();
+    for (int i = 0; i < neighbors.size(); i++) {
+        it = projection.find(*it_neighbor);
+        it_neighbor++;
+        if (it != projection.end()) {
+            result.insert(it -> first);
+            projection.erase(it++);
+        }
+    }
+}
+
+void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result) {
+    int x = coordinate[0];
+    int y = coordinate[1];
+    int radius = 1;
+    int count;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    unordered_set<array<int, 2>, container_hasher> neighbors;
+    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
+
+    // neighboring generation of coordinate
+    count = 0;
+    for (int i = -radius; i <= radius ; i++) {
+        for (int j = -radius; j <= radius ; j++) {
+            if (i == 0 && j == 0)
+                continue;
+            neighbors.insert({x + i, y + j});
+            count++;
+
+        }
+    }
+
+    // if a neighbor is present in tiles, add it in result
+    it_neighbor = neighbors.begin();
+    for (int i = 0; i < neighbors.size(); i++) {
+        it = squareProjection.find(*it_neighbor);
+        if (it != squareProjection.end()) {
+            result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+            squareProjection.erase(it++);
+        } else {
+            it = projection.find(*it_neighbor);
+            if (it != projection.end()) {
+                result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+                projection.erase(it++);
+            }
+        }
+
+
+        it_neighbor++;
+    }
+}
+
+void mapToTilesNoThreshold(double **m, double precision, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end) {
+    double scalar;
+    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    scalar = pow(10, precision);
+    int lat, lon;
+    for (int i = start; i <= end; i++) {
+        lat =(int) (m[i][0] * scalar);
+        lon =(int) (m[i][1] * scalar);
+        array<int, 2> tile = {lat,lon};
+        it = projection.find(tile);
+        if (it != projection.end()) {
+            it->second++;
+        } else {
+            projection[tile] = 1.0;
+        }
+    }
+}
+
 void mapToTilesPrime(   double **m,
                         double precision,
                         int threshold,
@@ -61,109 +210,21 @@ void mapToTilesPrime(   double **m,
 
 }
 
-void mapToTilesNoThreshold(double **m, double precision, int threshold, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end) {
-    double scalar;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    scalar = pow(10, precision);
-    int lat, lon;
-    for (int i = start; i <= end; i++) {
-        lat =(int) (m[i][0] * scalar);
-        lon =(int) (m[i][1] * scalar);
-        array<int, 2> tile = {lat,lon};
-        it = projection.find(tile);
-        if (it != projection.end()) {
-            it->second++;
-        } else {
-            projection[tile] = 1.0;
-        }
-    }
-} //unordered
-
-void mapToTiles(double **m, double precision, int threshold, int n, unordered_map<array<int, 2>, int, container_hasher> &projection, int start, int end) {
-    double scalar;
-    unordered_map<array<int, 2>, int, container_hasher>::iterator it;
-    scalar = pow(10, precision);
-    int lat, lon;
-    for (int i = start; i <= end; i++) {
-        lat =(int) (m[i][0] * scalar);
-        lon =(int) (m[i][1] * scalar);
-        array<int, 2> tile = {lat,lon};
-        it = projection.find(tile);
-        if (it != projection.end()) {
-            it->second++;
-        } else {
-            projection[tile] = 1;
-        }
-    }
-
-    // remove tile with count < threshold
-    it = projection.begin();
-    while (it != projection.end()) {
-        if (it -> second < threshold) {
-            projection.erase(it++);
-        } else {
-            it++;
-        }
-    }
-} //unordered
-
-void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
-    int x = coordinate[0];
-    int y = coordinate[1];
-    int radius = 1;
-    int count;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    unordered_set<array<int, 2>, container_hasher> neighbors;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
-
-    // neighboring generation of coordinate
-    count = 0;
-    for (int i = -radius; i <= radius ; i++) {
-        for (int j = -radius; j <= radius ; j++) {
-            if (i == 0 && j == 0)
-                continue;
-            neighbors.insert({x + i, y + j});
-            count++;
-
-        }
-    }
-
-    // if a neighbor is present in tiles, add it in result
-    it_neighbor = neighbors.begin();
-    for (int i = 0; i < neighbors.size(); i++) {
-        it = squareProjection.find(*it_neighbor);
-        if (it != squareProjection.end()) {
-            result.insert(it -> first);
-            squareProjection.erase(it++);
-        } else {
-            it = projection.find(*it_neighbor);
-            if (it != projection.end()) {
-                result.insert(it -> first);
-                projection.erase(it++);
-            }
-        }
-
-
-        it_neighbor++;
-    }
-} //unordered
-
-
-void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection,unordered_map<array<int, 2>, double , container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
+void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
     unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
 
     // read all tiles
-    while ((iterator = squareProjection.begin()) != squareProjection.end()) {
+    while ((iterator = projection.begin()) != projection.end()) {
         // read and remove first element recursively
         array<int, 2> x = iterator->first;
-        squareProjection.erase(iterator++);
+        projection.erase(iterator++);
 
         unordered_set<array<int, 2>, container_hasher> visited;
         visited.insert(x);
 
         // get neighbors of tile in exam
         unordered_set<array<int, 2>, container_hasher> to_check;
-        getNeighbors(x, squareProjection, projection, to_check);
+        getNeighbors(x, projection, to_check);
 
         // for each neighbor, try to find respectively neighbor in order to add they to single cluster
         while (!to_check.empty()) {
@@ -173,7 +234,7 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
 
             unordered_set<array<int, 2>, container_hasher> temp;
 
-            getNeighbors(value, squareProjection, projection, temp);
+            getNeighbors(value, projection, temp);
             while (!temp.empty()) {
                 to_check.insert(*temp.begin());
                 temp.erase((temp.begin()));
@@ -186,47 +247,6 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
 
     }
 } // unordered
-
-void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result) {
-    int x = coordinate[0];
-    int y = coordinate[1];
-    int radius = 1;
-    int count;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    unordered_set<array<int, 2>, container_hasher> neighbors;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
-
-    // neighboring generation of coordinate
-    count = 0;
-    for (int i = -radius; i <= radius ; i++) {
-        for (int j = -radius; j <= radius ; j++) {
-            if (i == 0 && j == 0)
-                continue;
-            neighbors.insert({x + i, y + j});
-            count++;
-
-        }
-    }
-
-    // if a neighbor is present in tiles, add it in result
-    it_neighbor = neighbors.begin();
-    for (int i = 0; i < neighbors.size(); i++) {
-        it = squareProjection.find(*it_neighbor);
-        if (it != squareProjection.end()) {
-            result.insert({(it->first)[0], (it->first)[1],(int) it->second});
-            squareProjection.erase(it++);
-        } else {
-            it = projection.find(*it_neighbor);
-            if (it != projection.end()) {
-                result.insert({(it->first)[0], (it->first)[1],(int) it->second});
-                projection.erase(it++);
-            }
-        }
-
-
-        it_neighbor++;
-    }
-} //unordered
 
 void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection,unordered_map<array<int, 2>, double , container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters) {
     unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
@@ -265,58 +285,54 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
         }
 
     }
-} // unordered
+}
 
-void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, double precision, int peerID) {
-    //ofstream outfile(to_string(peerID) +".csv");
-    cout.precision(10);
+void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID) {
+    ofstream outfile(to_string(peerID) +".csv");
     cout <<  "n° cluster: " << clusters.size() << endl;
     unordered_set<array<int, 2>, container_hasher>::iterator it;
 
-    double scalar = pow(10, precision); // to obtain the correct value of tiles
-
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
-        //outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
             count_tiles++; // count the total number of tiles clustered
-            //outfile << (*it)[0] / scalar << ",";
-            //outfile << (*it)[1] / scalar << ",";
+            outfile << (*it)[0] << ",";
+            outfile << (*it)[1] << ",";
 
-            //outfile << j << endl;
+            outfile << j << endl;
             it++; // next tile of the actual cluster
         }
     }
+    outfile.close();
     cout << "Tiles clustered: " << count_tiles << endl;
 } // semi-unordered
 
-void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, double precision, int peerID) {
-    //ofstream outfile(to_string(peerID) +".csv");
-    //cout.precision(10);
+void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID) {
+    ofstream outfile(to_string(peerID) +".csv");
     cout <<  "n° cluster: " << clusters.size() << endl;
     unordered_set<array<int, 3>, container_hasher>::iterator it;
 
-    double scalar = pow(10, precision); // to obtain the correct value of tiles
-
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
-        //cout << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
             count_tiles++; // count the total number of tiles clustered
-            //cout << (*it)[0] / 1 << ",";
-            //cout << (*it)[1] / 1 << ",         ";
-            //cout << (*it)[2] << ",";
+            outfile << (*it)[0] << ",";
+            outfile << (*it)[1] << ",         ";
+            //outfile << (*it)[2] << ","; // tile cardinality
 
-            //cout << j << endl;
+            outfile << j << endl;
             it++; // next tile of the actual cluster
         }
     }
-    cout << "Tiles clustered: " << count_tiles << endl;
-} // semi-unordered
+    outfile.close();
+    cout << "Tiles clustered: " << count_tiles << endl; // on terminal
 
-// used only in raster' version
+}
+
 void printAllPointsClustered(   vector<unordered_set<array<int, 3>, container_hasher>> &clusters,
                                 unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
     cout.precision(15);
@@ -378,10 +394,9 @@ void printAllPointsClustered(   vector<unordered_set<array<int, 3>, container_ha
     cout << "Tiles clustered: " << count_tiles << endl;
     cout << "Clusters: " << clusters.size() << endl;
     cout << "Points clustered: " << count_points << endl;
-    cout << "Points anallized: " << count_points + count_not_clustered << endl;
+    cout << "Points analyzed: " << count_points + count_not_clustered << endl;
 }
 
-// used only in raster' version
 void printAllPointsClustered(   vector<unordered_set<array<int, 2>, container_hasher>> &clusters,
                                 unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
     cout.precision(15);
@@ -510,63 +525,3 @@ void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clu
     cout << "Density mean: " << mean_density << endl;
 }
 
-int getDim(const string &name_file, int &row, int &column) {
-    // Initialization
-    row = 0;
-    column = 0;
-    ifstream inputFile(name_file);
-    while (inputFile) {
-        string s;
-        if (!getline(inputFile, s)) break;
-        if (row == 0) {
-            istringstream ss(s);
-            while (ss) {
-                string line;
-                if (!getline(ss, line, ','))
-                    break;
-                column++;
-            }
-        }
-        row++;
-    }
-    if (!inputFile.eof()) {
-        cerr << "Could not read file " << name_file << "\n";
-        //__throw_invalid_argument("File not found.");
-        return -1;
-    }
-    return 0;
-}
-
-int loadData(double **m, const string &name_file, int column) {
-    ifstream inputFile(name_file);
-    int row = 0;
-    while (inputFile) {
-        string s;
-        if (!getline(inputFile, s)) break;
-        if (s[0] != '#') {
-            istringstream ss(s);
-            while (ss) {
-                for (int i = 0; i < column; i++) {
-                    string line;
-                    if (!getline(ss, line, ','))
-                        break;
-                    try {
-                        m[row][i] = stod(line);
-                    }
-                    catch (const std::invalid_argument &e) {
-                        cout << "NaN found in file " << name_file << " line " << row
-                             << endl;
-                        e.what();
-                    }
-                }
-            }
-        }
-        row++;
-    }
-    if (!inputFile.eof()) {
-        cerr << "Could not read file " << name_file << "\n";
-        //__throw_invalid_argument("File not found.");
-        return -1;
-    }
-    return 0;
-}

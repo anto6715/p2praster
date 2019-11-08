@@ -58,6 +58,7 @@ int getDim(string name_file, int &row, int &column);
  * @param [in] column - Number of file column
  * @return Save in m the dataset loaded from name_file, return 0 if success, -1 in case of error
  */
+
 int loadData(double **m, string name_file, int column);
 
 /**
@@ -90,7 +91,6 @@ void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double,
  *
  * @param [in] m - Dataset
  * @param [in] precision - Parameter for raster algorithm
- * @param [in] threshold - Parameter for raster algorithm
  * @param [in,out] projection - Data structure where save the projection result of raster algorithm
  * @param [in] start - First point in the dataset of peer
  * @param [in] end - Last point in the dataset of peer
@@ -142,9 +142,7 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
  * tiles in a csv file name with peerId.csv
  *
  * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] precision - Parameter for raster algorithm
  * @param [in] peerID - (optional) Peer id that wnat to write on file
- * @param [in] outputOnFile - (optional) True if want to write a csv file
  */
 void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
 
@@ -153,9 +151,7 @@ void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clust
  * here clusters maintain information about tiles cardinality
  *
  * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] precision - Parameter for raster algorithm
  * @param [in] peerID - (optional) Peer id that wnat to write on file
- * @param [in] outputOnFile - (optional) True if want to write a csv file
  */
 void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
 
@@ -183,7 +179,7 @@ void printAllPointsClustered(vector<unordered_set<array<int, 3>, container_hashe
  * @param [in] clusters - Data structure which contains clusters
  * @param [in] all_points - Data structure which contains mapping tile-points for raster prime' variant
  * @param [in] precision - Parameter for raster algorithm
- * @Result Print on terminal the mean Shannon entropy and mean Density for each cluster
+ * @result Print on terminal the mean Shannon entropy and mean Density for each cluster
  */
 void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, double precision);// raster'
 

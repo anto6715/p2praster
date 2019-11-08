@@ -18,6 +18,7 @@
  * @return Return Manhattan Distance
  */
 int manhattanDistance(int x1, int x2, int y1, int y2);
+
 /**
  * This function compute the centroids for each clusters using a weighted average
  *
@@ -40,7 +41,7 @@ void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &cluste
  * @param [in,out] centroidsN - Data structure which contains centroids of peer's neighbor
  * @param [in,out] centroidsP - Data structure which contains centroids of peer
  * @param [in] maxDistance - Max distance to consider two cluster similar
- * @Result Save into clustersN and clustersP their union (the two clusters set will be equal at the end of function)
+ * @result Save into clustersN and clustersP their union (the two clusters set will be equal at the end of function)
  */
 void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersN, vector<unordered_set<array<int, 3>, container_hasher>> &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance);
 
@@ -58,7 +59,7 @@ void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unor
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 
 /**
- * This function implements the simultaneous Max and min algorithm
+ * This function implements the simultaneous Max and Min algorithm on both x and y axes
  *
  * @param [in] projection - Data structure with tiles
  * @param [in,out] maxX - Where save max value for tile x coordinates
@@ -77,7 +78,7 @@ void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &
  * @param [in,out] q - How many squares on y axis
  * @param [in] peers - Number of peers in the network
  * @param [in] min - Min square for each peer
- * @Result Compute the values p,q that form a grid p x q where each peer
+ * @result Compute the values p,q that form a grid p x q where each peer
  * has at least min squares
  */
 void getGridSize(int *p, int * q, int peers, int min);
@@ -132,23 +133,23 @@ void printGraphType(int type);
 using namespace std;
 using namespace std::chrono;
 
+/*!< @struct Params - A structure containing parameters read from command-line.  */
 struct Params {
-    uint32_t    domainSize;
-    long        ni;            // points number of dataset
-    int         peers;
-    string      outputFilename;
-    double      convThreshold;
-    int         convLimit;
-    int         graphType;
-    int         fanOut;
-    int         roundsToExecute;
-    double      precision;
-    int         threshold;
-    int         min_size;
-    int         radius;
-    int         maxDistance;  // for manhattan distance
-    string      name_file;
-    int         typeAlgorithm;
+    long        ni;                /*!< The number of point of dataset */
+    int         peers;             /*!< The number of peers */
+    string      outputFilename;    /*!< The path for the output file */
+    double      convThreshold;     /*!< The local convergence tolerance for the consensus algorithm */
+    int         convLimit;         /*!< The number of consecutive rounds in which a peer must locally converge */
+    int         graphType;         /*!< The graph distribution: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique) */
+    int         radius;            /*!< Parameter for graph generation */
+    int         fanOut;            /*!< The number of communication that a peer can carry out in a round (-1 ability communication with all neighbors) */
+    int         roundsToExecute;   /*!< The number of rounds to carry out in the consensus algorithm */
+    double      precision;         /*!< Raster parameters that determines tile dimension */
+    int         threshold;         /*!< Raster parameters that establish if maintain or not a tile */
+    int         min_size;          /*!< Raster parameters that establish the minimum number of tile in order to form a cluster */
+    int         maxDistance;       /*!< Max distance in order to consider two cluster the same */
+    string      name_file;         /*!< The path for the input CSV file */
+    int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
 };
 
 high_resolution_clock::time_point t1, t2;
@@ -157,7 +158,6 @@ int main(int argc, char **argv) {
     /*** Default Parameters***/
     long        ni; // points number
     long        *peerLastItem; // index of a peer last item
-    uint32_t    domainSize = 1048575; // number of possible distinct items
     int         peers = 10; // number of peers
     int         fanOut = 5; //fan-out of peers
     int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
@@ -172,7 +172,6 @@ int main(int argc, char **argv) {
     int         typeAlgorithm = 1;
     string      name_file = "../Datasets/S-sets/s1.csv";
 
-
     bool            outputOnFile = false;
     string          outputFilename;
     igraph_t        graph;
@@ -181,14 +180,7 @@ int main(int argc, char **argv) {
 
     /*** parse command-line parameters ***/
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-di") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing domain size parameter." << endl;
-                return -1;
-            }
-            domainSize = stol(argv[i]);
-        } else if (strcmp(argv[i], "-p") == 0) {
+        if (strcmp(argv[i], "-p") == 0) {
             i++;
             if (i >= argc) {
                 cerr << "Missing number of peers parameter." << endl;
@@ -273,16 +265,30 @@ int main(int argc, char **argv) {
 
     /*** read dataset dimensions ***/
     int row, column;
-    getDim(name_file, row, column);
+    if(getDim(name_file, row, column)) {
+        exit(-1);
+    }
     ni = row;
 
-    auto dataset_storage = new double[row*column];
-    auto dataset = new double*[row];
+    double *dataset_storage;
+    double **dataset;
+    try {
+        dataset_storage = new double[row*column];
+        dataset = new double*[row];
+
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
     for (int i = 0; i < row; i++) {
         dataset[i] = &dataset_storage[i*column];
     }
+
     StartTheClock();
-    loadData(dataset, name_file, column);
+    if(loadData(dataset, name_file, column)) {
+        exit(-1);
+    }
+
     double greaddatasettime = StopTheClock();
     if (!outputOnFile) {
         cout <<"Time (seconds) required to load the dataset: " << greaddatasettime << "\n";
@@ -291,9 +297,9 @@ int main(int argc, char **argv) {
 
     /**< Compute last item for each peer */
     peerLastItem = new long[peers]();
-    std::random_device rd; /**< obtain a random number from hardware */
-    std::mt19937 eng(rd()); /**< seed the generator */
-    std::uniform_real_distribution<> distr(-1, 1); /**< define the range */
+    std::random_device rd; /** obtain a random number from hardware */
+    std::mt19937 eng(rd()); /** seed the generator */
+    std::uniform_real_distribution<> distr(-1, 1); /** define the range */
 
     for(int i = 0; i < peers - 1; i++){
         float rnd = distr(eng);
@@ -320,7 +326,6 @@ int main(int argc, char **argv) {
     /**< assign parameters read from command line */
     params.name_file = name_file;
     params.ni = ni;
-    params.domainSize = domainSize;
     params.peers = peers;
     params.fanOut = fanOut;
     params.graphType = graphType;
@@ -338,8 +343,7 @@ int main(int argc, char **argv) {
     outputOnFile = !params.outputFilename.empty();
 
     if (!outputOnFile) {
-        printf("\n\nPARAMETERS:\n");
-        //printf("distinct items in the stream = %d\n", params.domainSize);
+        cout << "\n\nPARAMETERS:\n";
         cout << "dataset = " << params.name_file << "\n";
         cout << "n° points = " << params.ni << "\n";
         cout << "precision = " << params.precision << "\n";
@@ -387,7 +391,13 @@ int main(int argc, char **argv) {
     if (!outputOnFile) {
         cout << "\nApply first Raster projection to each peer's dataset...\n";
     }
-    auto *projection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+    unordered_map<array<int, 2>, double, container_hasher> *projection;
+    try {
+        projection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
     StartTheClock();
     int start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
@@ -404,23 +414,42 @@ int main(int argc, char **argv) {
     }
 
     // this is used to estimate the number of peers
-    auto *dimestimate = new double[params.peers]();
+    double *dimestimate;
+    try {
+        dimestimate = new double[params.peers]();
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
     dimestimate[0] = 1;
 
-    auto *prevestimate = new double[params.peers]();
-
-    auto *datasetsizeestimate = new double[params.peers]();
-    datasetsizeestimate[0] = peerLastItem[0] + 1;
-    for(int i = 1; i < peers; i++)
-        datasetsizeestimate[i] = peerLastItem[i] - peerLastItem[i-1];
+    double *prevestimate;
+    try {
+        prevestimate = new double[params.peers]();
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
 
     int Numberofconverged = params.peers;
 
-    auto *converged = new bool[params.peers]();
+    bool *converged;
+    try {
+        converged = new bool[params.peers]();
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
     for(int i = 0; i < params.peers; i++)
         converged[i] = false;
 
-    auto *convRounds = new int[params.peers]();
+    int *convRounds;
+    try {
+        convRounds = new int[params.peers]();
+    } catch (bad_alloc& ba) {
+        cerr << "bad_alloc caught: " << ba.what() << '\n';
+        exit(-1);
+    }
 
     int rounds = 0;
 
@@ -452,13 +481,10 @@ int main(int argc, char **argv) {
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
 
                 projectionMerge(projection[neighborID], projection[peerID]);
+
                 double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
                 dimestimate[peerID] = mean;
                 dimestimate[neighborID] = mean;
-
-                double mean_size = (datasetsizeestimate[peerID] + datasetsizeestimate[neighborID]) / 2;
-                datasetsizeestimate[peerID] = mean_size;
-                datasetsizeestimate[neighborID] = mean_size;
             }
 
             igraph_vector_destroy(&neighbors);
@@ -509,7 +535,7 @@ int main(int argc, char **argv) {
         dimestimate[peerID] = round(1 / dimestimate[peerID]);
     }
 
-    /*** Remove tiles < threshold***/
+    /*** Each peer remove tiles < threshold ***/
     for(int peerID = 0; peerID < params.peers; peerID++){
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
         it = projection[peerID].begin();
@@ -524,10 +550,19 @@ int main(int argc, char **argv) {
     }
     if (params.typeAlgorithm == 0) {
         /*** Simultaneous minimum and maximum algorithm***/
-        int *minX = (int *) calloc(params.peers, sizeof(int));
-        auto minY = (int *) calloc(params.peers, sizeof(int));
-        int *maxX = (int *) calloc(params.peers, sizeof(int));
-        int *maxY = (int *) calloc(params.peers, sizeof(int));
+        int *minX;
+        int *minY;
+        int *maxX;
+        int *maxY;
+        try {
+            minX = new int[params.peers];
+            minY = new int[params.peers];
+            maxX = new int[params.peers];
+            maxY = new int[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
 
         for(int peerID = 0; peerID < params.peers; peerID++){
             simultaneousMaxMin(projection[peerID], &maxX[peerID], &minX[peerID], &maxY[peerID], &minY[peerID]);
@@ -540,18 +575,41 @@ int main(int argc, char **argv) {
         }*/
 
         // (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
-        // (x2,y2) is the bottom-left corner cordinate of a square in checkerboard partition
-        auto y1 = new int*[params.peers];
-        auto x1 = new int*[params.peers];
-        auto y2 = new int*[params.peers];
-        auto x2 = new int*[params.peers];
+        // (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
+        int** y1;
+        int** x1;
+        int** y2;
+        int** x2;
+        try {
+            y1 = new int*[params.peers];
+            x1 = new int*[params.peers];
+            y2 = new int*[params.peers];
+            x2 = new int*[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
 
         // domain of dataset is divide in a grid p*q
-        auto q = new int[params.peers];
-        auto p = new int[params.peers];
+        int* q;
+        int* p;
+        try {
+            q = new int[params.peers];
+            p = new int[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         // how much square for each peer ( if p*q % peers != 0 some peers will have one more square)
-        auto squares = new int[params.peers];
+        int* squares;
+        try {
+            squares = new int[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         int min =1; // set as input parameter?
+
         // initial hypothesis
         for (int i = 0; i < params.peers; i++) {
             squares[i] = min;
@@ -575,13 +633,24 @@ int main(int argc, char **argv) {
             if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
                 squares[peerID]++;
             }
-            i = new int[squares[peerID]];
-            j = new int[squares[peerID]];
+            try {
+                i = new int[squares[peerID]];
+                j = new int[squares[peerID]];
+            } catch (bad_alloc& ba) {
+                cerr << "bad_alloc caught: " << ba.what() << '\n';
+                exit(-1);
+            }
 
-            y1[peerID] = new int[squares[peerID]];
-            x1[peerID] = new int[squares[peerID]];
-            y2[peerID] = new int[squares[peerID]];
-            x2[peerID] = new int[squares[peerID]];
+            try {
+                y1[peerID] = new int[squares[peerID]];
+                x1[peerID] = new int[squares[peerID]];
+                y2[peerID] = new int[squares[peerID]];
+                x2[peerID] = new int[squares[peerID]];
+            } catch (bad_alloc& ba) {
+                cerr << "bad_alloc caught: " << ba.what() << '\n';
+                exit(-1);
+            }
+
 
 
             for (int k = 0; k < squares[peerID]; k++) {
@@ -607,13 +676,19 @@ int main(int argc, char **argv) {
         delete[] p;
         delete[] q;
 
-        free(minX);
-        free(minY);
-        free(maxX);
-        free(maxY);
+        delete[] minX;
+        delete[] minY;
+        delete[] maxX;
+        delete[] maxY;
 
         /*** Each peer find the tiles in own square(s)***/
-        auto *squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+        unordered_map<array<int, 2>, double, container_hasher> *squareProjection;
+        try {
+            squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         for(int peerID = 0; peerID < params.peers; peerID++) {
             int skip;
             unordered_map<array<int, 2>, double, container_hasher>::iterator it;
@@ -656,8 +731,21 @@ int main(int argc, char **argv) {
 
 
         /***Each peer clustering its own tiles and calculate centroids of clusters***/
-        auto *clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
-        auto centroids = new vector<array<int, 2>>[params.peers];
+        vector<unordered_set<array<int, 3>, container_hasher>> *clusters;
+        try {
+            clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
+
+        vector<array<int, 2>> *centroids;
+        try {
+            centroids = new vector<array<int, 2>>[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         for(int peerID = 0; peerID < params.peers; peerID++) {
             clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
             getCentroids(clusters[peerID], centroids[peerID]);
@@ -677,8 +765,20 @@ int main(int argc, char **argv) {
             cout << "Time (seconds) required by local Raster clustering: " << clustertime << endl;
         }
 
-        auto clustersestimate = new double[params.peers]();
-        auto prevclustersestimate = new double[params.peers]();
+        double *clustersestimate;
+        try {
+            clustersestimate = new double[params.peers]();
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
+        double *prevclustersestimate;
+        try {
+            prevclustersestimate = new double[params.peers]();
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         for(int i = 0; i < params.peers; i++)
             clustersestimate[i] = (double )clusters[i].size();
 
@@ -693,12 +793,9 @@ int main(int argc, char **argv) {
         params.roundsToExecute = roundsToExecute;
         Numberofconverged = params.peers;
 
-
-
         if (!outputOnFile) {
             cout <<"\nStarting distributed merge of clusters..." << endl;
         }
-
 
         StartTheClock();
         /*** Start distributed cluster merge***/
@@ -791,7 +888,13 @@ int main(int argc, char **argv) {
 
 
     } else {
-        auto *clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
+        vector<unordered_set<array<int, 2>, container_hasher>> *clusters;
+        try {
+            clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
+        } catch (bad_alloc& ba) {
+            cerr << "bad_alloc caught: " << ba.what() << '\n';
+            exit(-1);
+        }
         if (!outputOnFile) {
             cout <<"\nEach peer clustering the global projection..." << endl;
         }
@@ -816,7 +919,6 @@ int main(int argc, char **argv) {
         }
         cout << "\n\n";
 
-
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
         mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
@@ -831,7 +933,6 @@ int main(int argc, char **argv) {
     delete[] dataset_storage;
     delete[] prevestimate;
     delete[] convRounds;
-    delete[] datasetsizeestimate;
 
 
 }
@@ -844,8 +945,7 @@ int manhattanDistance(int x1, int x2, int y1, int y2) {
 void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, vector<array<int, 2>> &centroids) {
     centroids.clear();
     unordered_set<array<int, 3>, container_hasher>::iterator it_tiles;
-    double n;
-    double x, y;
+    double n, x, y;
 
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
@@ -1078,7 +1178,6 @@ void usage(char* cmd)
     std::cerr
             << "Usage: " << cmd << "\n"
             << "  -ni   number of items\n"
-            << "  -di   number of possible distinct items (domain size)\n"
             << "  -p    number of peers\n"
             << "  -f    fan-out of peers\n"
             << "  -d    graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular\n"

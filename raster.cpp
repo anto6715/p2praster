@@ -78,25 +78,22 @@ int loadData(double **m, string name_file, int column) {
 void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
     int x = coordinate[0];
     int y = coordinate[1];
-    int radius = 1;
-    int count;
+    int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
     unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     unordered_set<array<int, 2>, container_hasher> neighbors;
     unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
 
-    // neighboring generation of coordinate
-    count = 0;
+    /// generation of neighbor coordinate
     for (int i = -radius; i <= radius ; i++) {
         for (int j = -radius; j <= radius ; j++) {
             if (i == 0 && j == 0)
                 continue;
             neighbors.insert({x + i, y + j});
-            count++;
 
         }
     }
 
-    // if a neighbor is present in tiles, add it in result
+    /// if a neighbor is present in projection, remove from there and add it in result
     it_neighbor = neighbors.begin();
     for (int i = 0; i < neighbors.size(); i++) {
         it = projection.find(*it_neighbor);
@@ -111,25 +108,21 @@ void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double,
 void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result) {
     int x = coordinate[0];
     int y = coordinate[1];
-    int radius = 1;
-    int count;
+    int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
     unordered_map<array<int, 2>, double, container_hasher>::iterator it;
     unordered_set<array<int, 2>, container_hasher> neighbors;
     unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
 
-    // neighboring generation of coordinate
-    count = 0;
+    /// generation of neighbor coordinate
     for (int i = -radius; i <= radius ; i++) {
         for (int j = -radius; j <= radius ; j++) {
             if (i == 0 && j == 0)
                 continue;
             neighbors.insert({x + i, y + j});
-            count++;
-
         }
     }
 
-    // if a neighbor is present in tiles, add it in result
+    /// if a neighbor is present in projection or squareProjection, remove from there and add it in result
     it_neighbor = neighbors.begin();
     for (int i = 0; i < neighbors.size(); i++) {
         it = squareProjection.find(*it_neighbor);
@@ -143,8 +136,6 @@ void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double,
                 projection.erase(it++);
             }
         }
-
-
         it_neighbor++;
     }
 }
@@ -185,20 +176,20 @@ void mapToTilesPrime(   double **m,
         it = projection.find(tile);
         if (it != projection.end()) {
             it->second++;
-        } else {
-            projection[tile] = 1;
-        }
-
-        it_map_all_points = all_points.find(tile);
-        if (it_map_all_points != all_points.end()) {
+            /// if the tile is present into projection then it must be present into all_points
+            it_map_all_points = all_points.find(tile);
+            /// update mapping tile-points
             (it_map_all_points -> second).insert({m[i][0],m[i][1]});
         } else {
+            projection[tile] = 1;
+            /// create mapping tile-point
             unordered_set<array<double , 2>, container_hasher> point;
             point.insert({m[i][0], m[i][1]});
             all_points[tile] = point;
         }
+
     }
-    // remove tile with count < threshold
+    /// remove tile with count < threshold
     it = projection.begin();
     while (it != projection.end()) {
         if (it -> second < threshold) {
@@ -213,34 +204,34 @@ void mapToTilesPrime(   double **m,
 void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
     unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
 
-    // read all tiles
+    /// read and remove all tiles one by one from projection
     while ((iterator = projection.begin()) != projection.end()) {
         // read and remove first element recursively
         array<int, 2> x = iterator->first;
         projection.erase(iterator++);
 
+        /// candidate cluster
         unordered_set<array<int, 2>, container_hasher> visited;
         visited.insert(x);
 
-        // get neighbors of tile in exam
+        /// get neighbors of tile in exam
         unordered_set<array<int, 2>, container_hasher> to_check;
         getNeighbors(x, projection, to_check);
 
-        // for each neighbor, try to find respectively neighbor in order to add they to single cluster
+        /// for each neighbor, try to find his neighbors recursively in order to add they to a single cluster
         while (!to_check.empty()) {
             array<int, 2> value = *to_check.begin() ;
             to_check.erase((to_check.begin()));
             visited.insert(value);
 
             unordered_set<array<int, 2>, container_hasher> temp;
-
             getNeighbors(value, projection, temp);
             while (!temp.empty()) {
                 to_check.insert(*temp.begin());
                 temp.erase((temp.begin()));
             }
         }
-        // validate visited as cluster if is size is >= min size
+        /// validate visited as cluster if is size is >= min size
         if (visited.size() >= min_size) {
             clusters.push_back(visited);
         }
@@ -251,35 +242,35 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &pro
 void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection,unordered_map<array<int, 2>, double , container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters) {
     unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
 
-    // read all tiles
+    /// read and remove all tiles one by one from projection
     while ((iterator = squareProjection.begin()) != squareProjection.end()) {
         // read and remove first element recursively
         array<int, 3> x;
         x = {(iterator->first)[0], (iterator->first)[1],(int) iterator->second};
         squareProjection.erase(iterator++);
 
+        /// candidate cluster
         unordered_set<array<int, 3>, container_hasher> visited;
         visited.insert(x);
 
-        // get neighbors of tile in exam
+        /// get neighbors of tile in exam
         unordered_set<array<int, 3>, container_hasher> to_check;
         getNeighbors(x, squareProjection, projection, to_check);
 
-        // for each neighbor, try to find respectively neighbor in order to add they to single cluster
+        /// for each neighbor, try to find his neighbors recursively in order to add they to a single cluster
         while (!to_check.empty()) {
             array<int, 3> value = *to_check.begin() ;
             to_check.erase((to_check.begin()));
             visited.insert(value);
 
             unordered_set<array<int, 3>, container_hasher> temp;
-
             getNeighbors(value, squareProjection, projection, temp);
             while (!temp.empty()) {
                 to_check.insert(*temp.begin());
                 temp.erase((temp.begin()));
             }
         }
-        // validate visited as cluster if is size is >= min size
+        /// validate visited as cluster if is size is >= min size
         if (visited.size() >= min_size) {
             clusters.push_back(visited);
         }
@@ -464,10 +455,78 @@ void printAllPointsClustered(   vector<unordered_set<array<int, 2>, container_ha
 
 // under the function there are the two variants of T type
 template <typename T>
-void genericPrintClusters(vector<T> &clusters, int peerID) {
+void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
+    cout.precision(15);
+    ofstream outfile("clustered.csv");
+    int count_not_clustered = 0;
+    int count_tiles = 0;
+    int count_points = 0;
+    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
+    unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
+    typename unordered_set<T, container_hasher>::iterator it_tiles;
+
+
+    /************ for each cluster in clusters ************/
+    for (int j = 0; j < clusters.size(); j++) {
+        //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
+        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+        /************ for each tile in cluster j-th ************/
+        for (int i = 0; i < clusters.at(j).size(); i++) {
+            it_map_all_points = all_points.find({(*it_tiles)[0], (*it_tiles)[1]}); // try to find in all_points the tile (with its list of points) from cluster
+            if (it_map_all_points != all_points.end()) {
+                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
+                /************ for each point in the tile ************/
+                for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
+                    outfile << (*it_set_all_points)[0] << ",";
+                    outfile << (*it_set_all_points)[1] << ",";
+                    outfile << j + 1 <<endl;
+                    it_set_all_points++;
+                    count_points++;
+                }
+                all_points.erase(it_map_all_points++);
+            }
+            it_tiles++;
+            count_tiles++;
+        }
+    }
+    it_map_all_points = all_points.begin(); // first tile remaining in all_points
+    /************ for each tile that are not in the clusters ************/
+    for (int i = 0; i < all_points.size(); i++) {
+        if (it_map_all_points != all_points.end()) {
+            it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
+            /************ for each point in the tiles that are not in the clusters ************/
+            for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
+                outfile << (*it_set_all_points)[0] << ",";
+                outfile << (*it_set_all_points)[1] << ",";
+                outfile << 0 <<endl;
+                it_set_all_points++;
+                count_not_clustered++;
+            }
+            it_map_all_points++;
+        }
+    }
+    outfile.close();
+    cout << "Total points not clustered: " << count_not_clustered << endl;
+    cout << "Tile not clustered: " << all_points.size() << endl;
+    cout << "Tiles clustered: " << count_tiles << endl;
+    cout << "Clusters: " << clusters.size() << endl;
+    cout << "Points clustered: " << count_points << endl;
+    cout << "Points analyzed " << count_points + count_not_clustered << endl;
+}
+/**
+ * These declarations are necessary for compiler in order to correctly link
+ * the header of a function with its implementation in presence of a template
+ */
+template void newPrintAllPointsClustered<array<int, 3>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+template void newPrintAllPointsClustered<array<int, 2>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+
+
+// under the function there are the two variants of T type
+template <typename T>
+void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID) {
     ofstream outfile(to_string(peerID) +".csv");
     cout <<  "n° cluster: " << clusters.size() << endl;
-    typename T::iterator it;
+    typename unordered_set<T, container_hasher>::iterator it;
 
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
@@ -489,8 +548,8 @@ void genericPrintClusters(vector<T> &clusters, int peerID) {
  * These declarations are necessary for compiler in order to correctly link
  * the header of a function with its implementation in presence of a template
  */
-template void genericPrintClusters<unordered_set<array<int, 3>, container_hasher>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
-template void genericPrintClusters<unordered_set<array<int, 2>, container_hasher>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
+template void genericPrintClusters<array<int, 3>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
+template void genericPrintClusters<array<int, 2>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
 
 void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters,
                     unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points,

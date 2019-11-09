@@ -48,29 +48,45 @@ struct container_hasher {
  * can take as argument both type of cluster and print on terminal the number of clusters,
  * the number of tiles clustered and print on a csv each cluster with correspondent tiles.
  *
- * @tparam T - Type of clsuter, can be: nordered_set<array<int, 3>, container_hasher> or nordered_set<array<int, 2>, container_hasher>
- * @param [in] c - Data structure which contains clusters to print
+ * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
+ * @param [in] clusters - Data structure which contains clusters to print
  * @param [in] peerID - Peer id that want to write on file
  */
 template <typename T>
-void genericPrintClusters(vector<T> &c, int peerID);
+void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID);
+
+/**
+ * THis function use template in order to use an only function to print both type of cluster
+ * that can be used in the two different type of algorithm in the main function. This function
+ * can take as argument both type of cluster and print on file named clustered.csv all dataset
+ * point with its clusters. Any point not clustered is assigned at cluster 0.
+ *
+ * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
+ * @param clusters - Data structure which contains clusters to print
+ * @param all_points - Data structure which contains the mapping tiles-points
+ */
+template <typename T>
+void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
 
 
 /**
+ * This function read the dimension of the csv file pass as argument
  *
  * @param [in] name_file - The input file name
  * @param [in,out] row - Number of csv rows
  * @param [in,out] column - Number of csv columns
- * @return Save in row, column the number of csv rows and columns, return 0 if success, -1 in case of error
+ * @return Return 0 if success, -1 in case of error
  */
 int getDim(string name_file, int &row, int &column);
 
 /**
+ * This function read the csv file pass as argument and load the dataset
+ * into the matrix m
  *
  * @param [in,out] m - Matrix where load dataset
  * @param [in] name_file - Name of dataset file
  * @param [in] column - Number of file column
- * @return Save in m the dataset loaded from name_file, return 0 if success, -1 in case of error
+ * @return Return 0 if success, -1 in case of error
  */
 
 int loadData(double **m, string name_file, int column);
@@ -186,6 +202,8 @@ void printAllPointsClustered(vector<unordered_set<array<int, 2>, container_hashe
  * @param all_points - Data structure which contains mapping tile-points for raster prime' variant
  */
 void printAllPointsClustered(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+
+
 
 // Remove?
 /**

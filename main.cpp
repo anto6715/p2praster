@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
     int         min_size = 3;
     int         radius = 0;
     int         maxDistance = 2;
-    int         typeAlgorithm = 1;
+    int         typeAlgorithm = 0;
     string      name_file = "../Datasets/S-sets/s1.csv";
 
     bool            outputOnFile = false;
@@ -295,7 +295,7 @@ int main(int argc, char **argv) {
     }
 
 
-    /**< Compute last item for each peer */
+    /** Compute last item for each peer */
     peerLastItem = new long[peers]();
     std::random_device rd; /** obtain a random number from hardware */
     std::mt19937 eng(rd()); /** seed the generator */
@@ -310,7 +310,7 @@ int main(int argc, char **argv) {
 
     peerLastItem[peers - 1] = ni-1;
 
-    /**< check the partitioning correctness */
+    /** check the partitioning correctness */
     long sum = peerLastItem[0] + 1;
     //cerr << "peer 0:" << sum << "\n";
     for(int i = 1; i < peers; i++) {
@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    /**< assign parameters read from command line */
+    /** assign parameters read from command line */
     params.name_file = name_file;
     params.ni = ni;
     params.peers = peers;
@@ -359,7 +359,7 @@ int main(int argc, char **argv) {
         cout << "\n\n";
     }
 
-    /**< Graph generation */
+    /** Graph generation */
     // turn on attribute handling in igraph
     igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -401,7 +401,7 @@ int main(int argc, char **argv) {
     StartTheClock();
     int start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
-        /*** points agglomeration ***/
+        /*** points projection ***/
         mapToTilesNoThreshold(dataset, precision, projection[peerID], start, peerLastItem[peerID]);
 
         start = peerLastItem[peerID] + 1;
@@ -568,7 +568,7 @@ int main(int argc, char **argv) {
             simultaneousMaxMin(projection[peerID], &maxX[peerID], &minX[peerID], &maxY[peerID], &minY[peerID]);
         }
 
-
+        // remove
         /*** per stampare il dataset (ordinato) ottenuto da ogni peer***/
         /*for(int peerID = 0; peerID < params.peers; peerID++) {
             printOrderedProjection(peerID, params.peers, projection[peerID]);
@@ -576,6 +576,7 @@ int main(int argc, char **argv) {
 
         // (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
         // (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
+        /*** x1,x2,y1,y2 are matrices with dimension of n° peers x squares[peerID] (some peer can have an extra square from checkerboard partition) ***/
         int** y1;
         int** x1;
         int** y2;
@@ -608,9 +609,10 @@ int main(int argc, char **argv) {
             cerr << "bad_alloc caught: " << ba.what() << '\n';
             exit(-1);
         }
+        /**!< minimun squares for each peer from checkerboard partition*/
         int min =1; // set as input parameter?
 
-        // initial hypothesis
+        // initial hypothesis, later each peer check if have an extra square
         for (int i = 0; i < params.peers; i++) {
             squares[i] = min;
         }
@@ -631,7 +633,7 @@ int main(int argc, char **argv) {
             // i, j coordinate in grid p*q,
             int *i, *j;
             if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
-                squares[peerID]++;
+                squares[peerID]++; // extra square for some peers
             }
             try {
                 i = new int[squares[peerID]];
@@ -697,6 +699,7 @@ int main(int argc, char **argv) {
                 skip = 0;
                 int a = (it -> first)[0];
                 int b = (it -> first)[1];
+                /*** Check if the tile is in one of peer square***/
                 for (int k = 0; k < squares[peerID]; k++) {
                     if (a <= x1[peerID][k] && a > x2[peerID][k] && b <= y1[peerID][k] && b > y2[peerID][k]) {
                         (squareProjection[peerID])[it -> first] = it -> second;
@@ -730,7 +733,7 @@ int main(int argc, char **argv) {
         StartTheClock();
 
 
-        /***Each peer clustering its own tiles and calculate centroids of clusters***/
+        /***Each peer clustering its own tiles and compute centroids of clusters***/
         vector<unordered_set<array<int, 3>, container_hasher>> *clusters;
         try {
             clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
@@ -882,7 +885,7 @@ int main(int argc, char **argv) {
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
         mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
-        printAllPointsClustered(clusters[0], all_points);
+        newPrintAllPointsClustered(clusters[0], all_points);
 
         delete[] prevclustersestimate;
 
@@ -922,7 +925,7 @@ int main(int argc, char **argv) {
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
         mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
-        printAllPointsClustered(clusters[0], all_points);
+        newPrintAllPointsClustered(clusters[0], all_points);
     }
 
 

@@ -507,7 +507,7 @@ template int printClusters<array<int, 3>>(vectorSet3 &clusters, int peerID);
 template int printClusters<array<int, 2>>(vectorSet2 &clusters, int peerID);
 
 int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double precision) {
-
+    int returnValue = -1;
     double scalar = pow(10, precision);
     double area = scalar * scalar;
     double mean_shannon;
@@ -524,7 +524,7 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     shannon = new (nothrow) double[clusters.size()];
     if(!shannon){
         cout << "Not enough memory" << endl;;
-        return -2;
+        return -1;
     }
 
 
@@ -599,6 +599,8 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     cout << "Shannon mean: " << mean_shannon << endl;
     cout << "Density mean: " << mean_density << endl;
 
+    returnValue = 0;
+
     ON_EXIT:
 
     if(shannon != nullptr)
@@ -617,6 +619,6 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     if(tile_points != nullptr)
         delete[] tile_points, tile_points = nullptr;
 
-    return 0;
+    return returnValue;
 }
 

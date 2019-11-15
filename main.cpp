@@ -20,13 +20,14 @@
 int manhattanDistance(int x1, int x2, int y1, int y2);
 
 /**
- * This function compute the centroids for each clusters using a weighted average
+ * This function compute the centroids for each clusters using a weighted average.
+ * Save into centroids[i] the centroid of clusters[i] (for each cluster in clusters)
  *
  * @param [in] clusters - Data structure which contains clusters
  * @param [in,out] centroids - Data structure where insert centroid of respectively cluster
- * @result Save into centroids[i] the centroid of clusters[i] (for each cluster in clusters)
+ * @return 0 if success, -1 in case of bad clusters structure, -2 in case of bad cluster structure
  */
-void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, vector<array<int, 2>> &centroids);
+int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids);
 
 /**
  * This function get cluster from peer and its neighbor and do the union.
@@ -41,20 +42,20 @@ void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &cluste
  * @param [in,out] centroidsN - Data structure which contains centroids of peer's neighbor
  * @param [in,out] centroidsP - Data structure which contains centroids of peer
  * @param [in] maxDistance - Max distance to consider two cluster similar
- * @result Save into clustersN and clustersP their union (the two clusters set will be equal at the end of function)
+ * @return 0 if success, -1 in case of memory error, -2 in case of cluster union error
  */
-void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersN, vector<unordered_set<array<int, 3>, container_hasher>> &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance);
+int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance);
 
 /**
- * This function unites two cluster that are similar but not equal,
+ * This function merge two cluster that are similar but not equal,
  * it add the tiles that are in common or compute the average for
  * tiles that have the same coordinate but different cardinality
  *
  * @param [in,out] clusterN - Data structure which contains cluster of peer's neighbor
  * @param [in,out] clusterP - Data structure which contains cluster of peer
- * @result Save into clusterN and clusterP their union (the two clusters will be equal at the end of function)
+ * @return 0 if success, -1 in case of bad clusters structure, -2 in case of insert error, -3 in case of arithmetic error
  */
-void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unordered_set<array<int, 3>, container_hasher> &clusterP);
+int clusterUnion(unSet3 &clusterN, unSet3 &clusterP);
 // to delete
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 
@@ -66,8 +67,9 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
  * @param [in,out] minX - Where save min value for tile x coordinates
  * @param [in,out] maxY - Where save max value for tile y coordinates
  * @param [in,out] minY - Where save min value for tile y coordinates
+ * @return 0 if success, -1 in case of bad projection structure
  */
-void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY);
+int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int *minY);
 
 /**
  * This function compute the parameter p and q to obtain a checkerboard partition (with grid p x q)
@@ -78,10 +80,9 @@ void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &
  * @param [in,out] q - How many squares on y axis
  * @param [in] peers - Number of peers in the network
  * @param [in] min - Min square for each peer
- * @result Compute the values p,q that form a grid p x q where each peer
- * has at least min squares
+ * @return 0 if success
  */
-void getGridSize(int *p, int * q, int peers, int min);
+int getGridSize(int *p, int * q, int peers, int min);
 
 /**
  * This function merge the tiles of two structures. If a tile is common,
@@ -91,9 +92,9 @@ void getGridSize(int *p, int * q, int peers, int min);
  *
  * @param projectionN - Data structure with peer neighbor tiles
  * @param projectionP - Data structure with  peer tiles
- * @result Save into projectionP and projectionN their union, update cardinality of each tiles with the average cardinality
+ * @return 0 if success, -1 in case of insert error, -2 in case of bad projections structure
  */
-void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionN, unordered_map<array<int, 2>, double, container_hasher> &projectionP);
+int projectionMerge(hashmap &projectionN, hashmap &projectionP);
 
 /**
  * This function compute the average between two double.
@@ -102,9 +103,9 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
  *
  * @param x - First number that will be update
  * @param y - Second number
- * @result x will be contain the result of the average
+ * @return 0 if success, -1 if x is invalid
  */
-void average(double *x, double *y);
+int average(double *x, double y);
 
 /**
  * When called save the actual time into global variable t1
@@ -936,17 +937,24 @@ int manhattanDistance(int x1, int x2, int y1, int y2) {
     return abs(x1-x2) + abs(y1-y2);
 }
 
-void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, vector<array<int, 2>> &centroids) {
+int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
+    if (clusters.size() <= 0) {
+        cerr << "Bad clusters data structure" << endl;
+        return -1;
+    }
     centroids.clear();
-    unordered_set<array<int, 3>, container_hasher>::iterator it_tiles;
+    unSet3::iterator it_tiles;
     double n, x, y;
 
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
-        n = 0;
-        x = 0;
-        y = 0;
+        n = 0, x = 0, y = 0;
+        if (!clusters.at(j).size()) {
+            cerr << "Bad cluster structure" << endl;
+            centroids.clear();
+            return -2;
+        }
         it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
         /************ for each tile in cluster j-th ************/
         for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
@@ -958,6 +966,7 @@ void getCentroids(vector<unordered_set<array<int, 3>, container_hasher>> &cluste
         centroids.push_back({(int) (x/n), (int) (y/n)});
     }
 
+    return 0;
 }
 
 //remove
@@ -981,14 +990,17 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 
 }
 
-void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &projection, int *maxX, int *minX, int *maxY, int *minY) {
-    int x1;
-    int x2;
-    int y1;
-    int y2;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int *minY) {
+    if (projection.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return -1;
+    }
+    int x1, x2, y1, y2;
+
+    hashmap::iterator it;
     it = projection.begin();
-    if ((projection.size() %2) != 0) {  // odd case
+
+    if ((projection.size() % 2) != 0) {  // odd case
         *minX = (it -> first)[0];  // set as minX the first value
         *minY = (it -> first)[1];  // set as minY the first value
         *maxX = (it -> first)[0];  // set as maxX the first value
@@ -1051,9 +1063,11 @@ void simultaneousMaxMin(unordered_map<array<int, 2>, double, container_hasher> &
             }
         }
     }
+
+    return 0;
 }
 
-void getGridSize(int *p, int *q, int peers, int min) {
+int getGridSize(int *p, int *q, int peers, int min) {
     *q = sqrt(peers*min);
     if ((*q * *q) != peers*min) { // check if peers*min is a perfect square
         *p = *q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
@@ -1061,6 +1075,8 @@ void getGridSize(int *p, int *q, int peers, int min) {
     } else {
         *p = *q;
     }
+
+    return 0;
 }
 /**
  * The first while iterates on all neighbor tiles, if a tile is yet present
@@ -1072,9 +1088,18 @@ void getGridSize(int *p, int *q, int peers, int min) {
  * and divide by two all tiles cardinality to get the average for each
  * tile in a linear time (include common and uncommon tiles)
  */
-void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionN, unordered_map<array<int, 2>, double, container_hasher> &projectionP){
-    unordered_map<array<int, 2>, double, container_hasher>::iterator itN;
-    unordered_map<array<int, 2>, double , container_hasher>::iterator itP;
+int projectionMerge(hashmap &projectionN, hashmap &projectionP){
+    if (projectionN.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return -2;
+    }
+
+    if (projectionP.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return -2;
+    }
+    hashmap::iterator itN;
+    hashmap::iterator itP;
 
     itN = projectionN.begin();
     while (itN != projectionN.end()) {
@@ -1082,16 +1107,23 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
         if (itP != projectionP.end()) { // tile is common
             itP -> second += itN->second;
         } else {
-            projectionP[itN -> first] = (itN->second);
+            auto check = projectionP.insert( {itN -> first, itN -> second});
+            if (!(check.second)) {
+                cerr << "Insert Error" << endl;
+                return -1;
+            }
         }
         itN++;
     }
+    // now compute average for each tile ( common or not)
     itP = projectionP.begin();
     while (itP != projectionP.end()) {
         itP -> second /= 2;
         itP++;
     }
     projectionN = projectionP;
+
+    return 0;
 }
 /**
  * This function use an hashmap to merge in linear time 2 clusters with dimension m and n.
@@ -1103,33 +1135,72 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
  * If is not present add it to the hashmap, also in this case the add operation
  * in the worst case will be O(n).
  */
-void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unordered_set<array<int, 3>, container_hasher> &clusterP) {
-    unordered_set<array<int, 3>, container_hasher>::iterator itN = clusterN.begin();
-    unordered_set<array<int, 3>, container_hasher>::iterator itP = clusterP.begin();
-    unordered_map<array<int, 2>, double, container_hasher>::iterator itTmp;
+int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
+    if (clusterN.size() <= 0) {
+        cerr << "Bad cluster data structure" << endl;
+        return -1;
+    }
+    if (clusterP.size() <= 0) {
+        cerr << "Bad cluster data structure" << endl;
+        return -1;
+    }
+    unSet3::iterator itN = clusterN.begin();
+    unSet3::iterator itP = clusterP.begin();
+    hashmap::iterator itTmp;
 
-    unordered_map<array<int, 2>, double, container_hasher> tmp;
-    unordered_set<array<int, 3>, container_hasher> s;
+    hashmap tmp;
+    unSet3 s;
+
+    array<int, 2> tile;
+    int cardinality;
 
     for (int k = 0; k < clusterN.size(); ++k) {
-        tmp[{(*itN)[0], (*itN)[1]}] = (*itN)[2];
+        tile = { (*itN)[0], (*itN)[1] };
+        cardinality =  (*itN)[2];
+
+        auto check = tmp.insert({tile, cardinality});
+        if (!(check.second)) {
+            cerr << "Insert Error" << endl;
+            return -2;
+        }
         itN++;
     }
+
     for (int l = 0; l < clusterP.size(); ++l) {
-        itTmp = tmp.find({(*itP)[0], (*itP)[1]});
-        if (itTmp != tmp.end())
-            itTmp ->second = (itTmp -> second + (*itP)[2]) / 2.0;
-        else
-            tmp[{(*itP)[0], (*itP)[1]}] = (*itP)[2];
+        tile = { (*itP)[0], (*itP)[1] };
+        cardinality =  (*itP)[2];
+
+        itTmp = tmp.find(tile);
+        if (itTmp != tmp.end()) {
+            if (!average(&itTmp -> second, cardinality)) {
+                cerr << "Average Error" << endl;
+                return -3;
+            }
+        }
+
+        else {
+            auto check = tmp.insert( {tile, cardinality});
+            if (!(check.second)) {
+                cerr << "Insert Error" << endl;
+                return -2;
+            }
+        }
         itP++;
     }
+
     itTmp = tmp.begin();
     for (int m = 0; m < tmp.size(); m++) {
-        s.insert({ (itTmp ->first)[0], (itTmp ->first)[1], (int) itTmp -> second});
+        auto check = s.insert({ (itTmp ->first)[0], (itTmp ->first)[1], (int) itTmp -> second});
+        if (!(check.second)) {
+            cerr << "Insert Error" << endl;
+            return -2;
+        }
         itTmp++;
     }
     clusterP.operator=(s);
     clusterN.operator=(s);
+
+    return 0;
 }
 /**
  * The double for cycle find all common cluster and set to 1 the correspondent index
@@ -1138,25 +1209,36 @@ void clusterUnion(unordered_set<array<int, 3>, container_hasher> &clusterN, unor
  * In this way the nex for cycle using these information will copy only the cluster
  * that are not common.
  */
-void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clustersN, vector<unordered_set<array<int, 3>, container_hasher>> &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance) {
-    int *notCopyP;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterP is also present in clusterN */
-    int *notCopyN;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterN is also present in clusterP */
-    try {
-        notCopyP = new int[centroidsP.size()]();
-        notCopyN = new int[centroidsN.size()]();
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
+int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance) {
+    int tmpSize = centroidsP.size(); /// get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
+    int returnValue = -1;
+    int *notCopyP = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterP is also present in clusterN */
+    int *notCopyN = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterN is also present in clusterP */
+
+    notCopyP = new (nothrow) int[centroidsP.size()]();
+    if(!notCopyP){
+        cout << "Not enough memory\n";
+        return -1;
     }
 
-    int tmpSize = centroidsP.size(); /// get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
+    notCopyN = new (nothrow) int[centroidsN.size()]();
+    if(!notCopyN){
+        cout << "Not enough memory\n";
+        goto ON_EXIT;
+    }
+
     for (int k = 0; k < centroidsN.size(); k++) {
         for (int l = 0; l < tmpSize; l++) {
             if (manhattanDistance(centroidsN.at(k)[0], centroidsP.at(l)[0], centroidsN.at(k)[1], centroidsP.at(l)[1]) <= maxDistance) {
-                notCopyP[l] = 1;
-                notCopyN[k] = 1;
-                if ( !(clustersP.at(l) == clustersN.at(k)))
-                    clusterUnion(clustersN.at(k), clustersP.at(l));
+                notCopyP[l] = 1, notCopyN[k] = 1;
+                if ( !(clustersP.at(l) == clustersN.at(k))) {
+                    if (!clusterUnion(clustersN.at(k), clustersP.at(l))) {
+                        cerr << "Cluster Union error" << endl;
+                        returnValue = -2;
+                        goto ON_EXIT;
+                    }
+
+                }
                 break;
             }
         }
@@ -1174,21 +1256,29 @@ void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clust
             centroidsN.push_back({centroidsP.at(l)[0], centroidsP.at(l)[1]});
         }
     }
-    delete[] notCopyP;
-    delete[] notCopyN;
+
+    returnValue = 0;
+
+    ON_EXIT:
+    if (notCopyN != nullptr)
+        delete[] notCopyN;
+
+    if (notCopyP != nullptr)
+        delete[] notCopyP;
+
+    return returnValue;
 
 }
 
-void average(double *x, double *y)  {
+int average(double *x, double y)  {
     if (x == nullptr) {
-        cerr << "x cannot be null!";
-        exit(EXIT_FAILURE);
-    } else if (y == nullptr) {
-        *x = *x/2.0;
+        cerr << "x cannot be null!" << endl;
+        return -1;
     } else {
-        *x = (*x+*y)/2.0;
+        *x = (*x+y)/2.0;
     }
 
+    return 0;
 }
 
 void StartTheClock(){

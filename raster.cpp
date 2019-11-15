@@ -58,9 +58,9 @@ int loadData(double **m, string name_file, int column) {
                         m[row][i] = stod(line);
                     }
                     catch (const std::invalid_argument &e) {
-                        cout << "NaN found in file " << name_file << " line " << row
+                        cerr << "NaN found in file " << name_file << " line " << row
                              << endl;
-                        e.what();
+                        return -2;
                     }
                 }
             }
@@ -75,13 +75,13 @@ int loadData(double **m, string name_file, int column) {
     return 0;
 }
 
-void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result) {
+int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) {
     int x = coordinate[0];
     int y = coordinate[1];
     int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    unordered_set<array<int, 2>, container_hasher> neighbors;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
+    hashmap::iterator it;
+    unSet2 neighbors;
+    unSet2::iterator it_neighbor;
 
     /// generation of neighbor coordinate
     for (int i = -radius; i <= radius ; i++) {
@@ -103,15 +103,17 @@ void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double,
             projection.erase(it++);
         }
     }
+
+    return 0;
 }
 
-void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result) {
+int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &projection, unSet3 &result) {
     int x = coordinate[0];
     int y = coordinate[1];
     int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    unordered_set<array<int, 2>, container_hasher> neighbors;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_neighbor;
+    hashmap::iterator it;
+    unSet2 neighbors;
+    unSet2::iterator it_neighbor;
 
     /// generation of neighbor coordinate
     for (int i = -radius; i <= radius ; i++) {
@@ -138,71 +140,111 @@ void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double,
         }
         it_neighbor++;
     }
+
+    return 0;
 }
 
-void mapToTilesNoThreshold(double **m, double precision, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end) {
+int mapToTiles(double **m, double precision, hashmap &projection, int start, int end) {
     double scalar;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+    int x, y;
+    hashmap::iterator it;
     scalar = pow(10, precision);
-    int lat, lon;
+
     for (int i = start; i <= end; i++) {
-        lat =(int) (m[i][0] * scalar);
-        lon =(int) (m[i][1] * scalar);
-        array<int, 2> tile = {lat,lon};
+        x =(int) (m[i][0] * scalar);
+        y =(int) (m[i][1] * scalar);
+        array<int, 2> tile = {x,y};
         it = projection.find(tile);
         if (it != projection.end()) {
             it->second++;
         } else {
-            projection[tile] = 1.0;
+            auto a = projection.insert({tile, 1.0});
+            if (!(a.second)) {
+                cerr << "Insert Error" << endl;
+                return -1;
+            }
         }
     }
+
+    return 0;
 }
 
-void mapToTilesPrime(   double **m,
-                        double precision,
-                        int threshold,
-                        int n,
-                        unordered_map<array<int, 2>, double, container_hasher> &projection,
-                        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points) {
+int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap &projection, hashmapUnset &all_points) {
     double scalar;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
+    int x, y;
+    hashmap::iterator it;
+    hashmapUnset::iterator it_map_all_points;
+
     scalar = pow(10, precision);
-    int lat, lon;
+
     for (int i = 0; i < n; i++) {
-        lat =(int) (m[i][0] * scalar);
-        lon =(int) (m[i][1] * scalar);
-        array<int, 2> tile = {lat,lon};
+        x =(int) (m[i][0] * scalar);
+        y =(int) (m[i][1] * scalar);
+        array<int, 2> tile = {x,y};
         it = projection.find(tile);
         if (it != projection.end()) {
             it->second++;
             /// if the tile is present into projection then it must be present into all_points
             it_map_all_points = all_points.find(tile);
-            /// update mapping tile-points
-            (it_map_all_points -> second).insert({m[i][0],m[i][1]});
+            if (it_map_all_points == all_points.end()) {
+                cerr << "Find error" << endl;
+                return -1;
+            }
+
+            /// update mapping tile-points adding the new point
+            auto a = (it_map_all_points -> second).insert({m[i][0],m[i][1]});
+            if (!(a.second)) {
+                cerr << "Map insert Error" << endl;
+                return -2;
+            }
         } else {
-            projection[tile] = 1;
+            auto a = projection.insert({tile, 1.0});
+            if (!(a.second)) {
+                cerr << "Map insert Error" << endl;
+                return -2;
+            }
+
             /// create mapping tile-point
             unordered_set<array<double , 2>, container_hasher> point;
-            point.insert({m[i][0], m[i][1]});
-            all_points[tile] = point;
+            auto b = point.insert({m[i][0], m[i][1]});
+            if (!(b.second)) {
+                cerr << "Set insert Error" << endl;
+                return -2;
+            }
+            auto c = all_points.insert({tile, point});
+            if (!(c.second)) {
+                cerr << "Map insert Error" << endl;
+                return -2;
+            }
         }
 
     }
-    /// remove tile with count < threshold
+    /// remove tile with cardinality < threshold
+    projectionThreshold(projection, threshold);
+    return 0;
+
+}
+
+int projectionThreshold(hashmap &projection, int threshold) {
+    hashmap::iterator it;
     it = projection.begin();
-    while (it != projection.end()) {
+    while(it != projection.end()) {
         if (it -> second < threshold) {
             projection.erase(it++);
         } else {
             it++;
         }
     }
+    return 0;
 
 }
 
-void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters) {
-    unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
+int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
+    if (projection.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return -1;
+    }
+    hashmap::iterator iterator;
 
     /// read and remove all tiles one by one from projection
     while ((iterator = projection.begin()) != projection.end()) {
@@ -211,23 +253,36 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &pro
         projection.erase(iterator++);
 
         /// candidate cluster
-        unordered_set<array<int, 2>, container_hasher> visited;
-        visited.insert(x);
+        unSet2 visited;
+        auto a = visited.insert(x);
+        if (!(a.second)) {
+            cerr << "Set insert Error" << endl;
+            return -2;
+        }
 
         /// get neighbors of tile in exam
-        unordered_set<array<int, 2>, container_hasher> to_check;
+        unSet2 to_check;
         getNeighbors(x, projection, to_check);
+
 
         /// for each neighbor, try to find his neighbors recursively in order to add they to a single cluster
         while (!to_check.empty()) {
             array<int, 2> value = *to_check.begin() ;
             to_check.erase((to_check.begin()));
-            visited.insert(value);
+            auto b = visited.insert(value);
+            if (!(b.second)) {
+                cerr << "Set insert Error" << endl;
+                return -2;
+            }
 
-            unordered_set<array<int, 2>, container_hasher> temp;
+            unSet2 temp;
             getNeighbors(value, projection, temp);
             while (!temp.empty()) {
-                to_check.insert(*temp.begin());
+                auto c = to_check.insert(*temp.begin());
+                if (!(c.second)) {
+                    cerr << "Set insert Error" << endl;
+                    return -2;
+                }
                 temp.erase((temp.begin()));
             }
         }
@@ -235,12 +290,17 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &pro
         if (visited.size() >= min_size) {
             clusters.push_back(visited);
         }
-
     }
+
+    return 0;
 } // unordered
 
-void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection,unordered_map<array<int, 2>, double , container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters) {
-    unordered_map<array<int, 2>, double, container_hasher>::iterator iterator;
+int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters) {
+    if (squareProjection.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return -1;
+    }
+    hashmap::iterator iterator;
 
     /// read and remove all tiles one by one from projection
     while ((iterator = squareProjection.begin()) != squareProjection.end()) {
@@ -250,23 +310,35 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
         squareProjection.erase(iterator++);
 
         /// candidate cluster
-        unordered_set<array<int, 3>, container_hasher> visited;
-        visited.insert(x);
+        unSet3 visited;
+        auto a = visited.insert(x);
+        if (!(a.second)) {
+            cerr << "Set insert Error" << endl;
+            return -2;
+        }
 
         /// get neighbors of tile in exam
-        unordered_set<array<int, 3>, container_hasher> to_check;
+        unSet3 to_check;
         getNeighbors(x, squareProjection, projection, to_check);
 
         /// for each neighbor, try to find his neighbors recursively in order to add they to a single cluster
         while (!to_check.empty()) {
             array<int, 3> value = *to_check.begin() ;
             to_check.erase((to_check.begin()));
-            visited.insert(value);
+            auto b = visited.insert(value);
+            if (!(b.second)) {
+                cerr << "Set insert Error" << endl;
+                return -2;
+            }
 
-            unordered_set<array<int, 3>, container_hasher> temp;
+            unSet3 temp;
             getNeighbors(value, squareProjection, projection, temp);
             while (!temp.empty()) {
-                to_check.insert(*temp.begin());
+                auto c = to_check.insert(*temp.begin());
+                if (!(c.second)) {
+                    cerr << "Set insert Error" << endl;
+                    return -2;
+                }
                 temp.erase((temp.begin()));
             }
         }
@@ -276,192 +348,33 @@ void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squ
         }
 
     }
-}
 
-void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID) {
-    ofstream outfile(to_string(peerID) +".csv");
-    cout <<  "n° cluster: " << clusters.size() << endl;
-    unordered_set<array<int, 2>, container_hasher>::iterator it;
-
-    int count_tiles = 0;
-    for (int j = 0; j < clusters.size(); j++) {
-        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
-        it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
-        for (int i = 0; i < clusters.at(j).size(); i++) {
-            count_tiles++; // count the total number of tiles clustered
-            outfile << (*it)[0] << ",";
-            outfile << (*it)[1] << ",";
-
-            outfile << j << endl;
-            it++; // next tile of the actual cluster
-        }
-    }
-    outfile.close();
-    cout << "Tiles clustered: " << count_tiles << endl;
-} // semi-unordered
-
-void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID) {
-    ofstream outfile(to_string(peerID) +".csv");
-    cout <<  "n° cluster: " << clusters.size() << endl;
-    unordered_set<array<int, 3>, container_hasher>::iterator it;
-
-    int count_tiles = 0;
-    for (int j = 0; j < clusters.size(); j++) {
-        outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
-        it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
-        for (int i = 0; i < clusters.at(j).size(); i++) {
-            count_tiles++; // count the total number of tiles clustered
-            outfile << (*it)[0] << ",";
-            outfile << (*it)[1] << ",         ";
-            //outfile << (*it)[2] << ","; // tile cardinality
-
-            outfile << j << endl;
-            it++; // next tile of the actual cluster
-        }
-    }
-    outfile.close();
-    cout << "Tiles clustered: " << count_tiles << endl; // on terminal
-
-}
-
-
-void printAllPointsClustered(   vector<unordered_set<array<int, 3>, container_hasher>> &clusters,
-                                unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
-    cout.precision(15);
-    ofstream outfile("clustered.csv");
-    int count_not_clustered = 0;
-    int count_tiles = 0;
-    int count_points = 0;
-    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
-    unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
-    unordered_set<array<int, 3>, container_hasher>::iterator it_tiles;
-
-
-    /************ for each cluster in clusters ************/
-    for (int j = 0; j < clusters.size(); j++) {
-        //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
-        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
-        /************ for each tile in cluster j-th ************/
-        for (int i = 0; i < clusters.at(j).size(); i++) {
-            it_map_all_points = all_points.find({(*it_tiles)[0], (*it_tiles)[1]}); // try to find in all_points the tile (with its list of points) from cluster
-            if (it_map_all_points != all_points.end()) {
-                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-                /************ for each point in the tile ************/
-                for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
-                    outfile << (*it_set_all_points)[0] << ",";
-                    outfile << (*it_set_all_points)[1] << ",";
-                    outfile << j + 1 <<endl;
-                    //cout << (*it_set_all_points)[0] << ",";
-                    //cout << (*it_set_all_points)[1] << ",";
-                    //cout << j <<endl;
-                    it_set_all_points++;
-                    count_points++;
-                }
-                all_points.erase(it_map_all_points++);
-            }
-            it_tiles++;
-            count_tiles++;
-        }
-    }
-    it_map_all_points = all_points.begin(); // first tile remaining in all_points
-    /************ for each tile that are not in the clusters ************/
-    for (int i = 0; i < all_points.size(); i++) {
-        if (it_map_all_points != all_points.end()) {
-            it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-            /************ for each point in the tiles that are not in the clusters ************/
-            for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
-                outfile << (*it_set_all_points)[0] << ",";
-                outfile << (*it_set_all_points)[1] << ",";
-                outfile << 0 <<endl;
-                it_set_all_points++;
-                count_not_clustered++;
-            }
-            //all_points.erase(it_map_all_points++);
-            it_map_all_points++;
-        }
-    }
-    outfile.close();
-    cout << "Total points not clustered: " << count_not_clustered << endl;
-    cout << "Tile not clustered: " << all_points.size() << endl;
-    cout << "Tiles clustered: " << count_tiles << endl;
-    cout << "Clusters: " << clusters.size() << endl;
-    cout << "Points clustered: " << count_points << endl;
-    cout << "Points analyzed: " << count_points + count_not_clustered << endl;
-}
-
-void printAllPointsClustered(   vector<unordered_set<array<int, 2>, container_hasher>> &clusters,
-                                unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
-    cout.precision(15);
-    ofstream outfile("clustered.csv");
-    int count_not_clustered = 0;
-    int count_tiles = 0;
-    int count_points = 0;
-    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
-    unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_tiles;
-
-
-    /************ for each cluster in clusters ************/
-    for (int j = 0; j < clusters.size(); j++) {
-        //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
-        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
-        /************ for each tile in cluster j-th ************/
-        for (int i = 0; i < clusters.at(j).size(); i++) {
-            it_map_all_points = all_points.find((*it_tiles)); // try to find in all_points the tile (with its list of points) from cluster
-            if (it_map_all_points != all_points.end()) {
-                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-                /************ for each point in the tile ************/
-                for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
-                    outfile << (*it_set_all_points)[0] << ",";
-                    outfile << (*it_set_all_points)[1] << ",";
-                    outfile << j + 1 <<endl;
-                    //cout << (*it_set_all_points)[0] << ",";
-                    //cout << (*it_set_all_points)[1] << ",";
-                    //cout << j <<endl;
-                    it_set_all_points++;
-                    count_points++;
-                }
-                all_points.erase(it_map_all_points++);
-            }
-            it_tiles++;
-            count_tiles++;
-        }
-    }
-    it_map_all_points = all_points.begin(); // first tile remaining in all_points
-    /************ for each tile that are not in the clusters ************/
-    for (int i = 0; i < all_points.size(); i++) {
-        if (it_map_all_points != all_points.end()) {
-            it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-            /************ for each point in the tiles that are not in the clusters ************/
-            for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
-                outfile << (*it_set_all_points)[0] << ",";
-                outfile << (*it_set_all_points)[1] << ",";
-                outfile << 0 <<endl;
-                it_set_all_points++;
-                count_not_clustered++;
-            }
-            //all_points.erase(it_map_all_points++);
-            it_map_all_points++;
-        }
-    }
-    outfile.close();
-    cout << "Total points not clustered: " << count_not_clustered << endl;
-    cout << "Tile not clustered: " << all_points.size() << endl;
-    cout << "Tiles clustered: " << count_tiles << endl;
-    cout << "Clusters: " << clusters.size() << endl;
-    cout << "Points clustered: " << count_points << endl;
-    cout << "Points anallized: " << count_points + count_not_clustered << endl;
+    return 0;
 }
 
 // under the function there are the two variants of T type
 template <typename T>
-void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
-    cout.precision(15);
+int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
+    if (clusters.size() <= 0) {
+        cerr << "Bad clusters data structure" << endl;
+        return -2;
+    }
+
+    if (all_points.size() <= 0) {
+        cerr << "Bad all_points data structure" << endl;
+        return -3;
+    }
+
     ofstream outfile("clustered.csv");
+    if (!outfile.is_open()) {
+        cerr << "Can't open/create file: " << "clustered.csv" << endl;
+        return -1;
+    }
+
     int count_not_clustered = 0;
     int count_tiles = 0;
     int count_points = 0;
-    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
+    hashmapUnset::iterator it_map_all_points;
     unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
     typename unordered_set<T, container_hasher>::iterator it_tiles;
 
@@ -469,11 +382,24 @@ void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clus
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
+        if (!clusters.at(j).size()) {
+            cerr << "Bad cluster structure" << endl;
+            outfile.clear();
+            outfile.close();
+            return -4;
+        }
         it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
         /************ for each tile in cluster j-th ************/
         for (int i = 0; i < clusters.at(j).size(); i++) {
             it_map_all_points = all_points.find({(*it_tiles)[0], (*it_tiles)[1]}); // try to find in all_points the tile (with its list of points) from cluster
             if (it_map_all_points != all_points.end()) {
+                if (!(it_map_all_points -> second).size()) {
+                    cerr << "Bad all_points structure" << endl;
+                    outfile.clear();
+                    outfile.close();
+                    return -3;
+
+                }
                 it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
                 /************ for each point in the tile ************/
                 for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
@@ -489,48 +415,75 @@ void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clus
             count_tiles++;
         }
     }
-    it_map_all_points = all_points.begin(); // first tile remaining in all_points
-    /************ for each tile that are not in the clusters ************/
-    for (int i = 0; i < all_points.size(); i++) {
-        if (it_map_all_points != all_points.end()) {
-            it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-            /************ for each point in the tiles that are not in the clusters ************/
-            for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
-                outfile << (*it_set_all_points)[0] << ",";
-                outfile << (*it_set_all_points)[1] << ",";
-                outfile << 0 <<endl;
-                it_set_all_points++;
-                count_not_clustered++;
+    // in case of points/tiles not clustered
+    if (all_points.size() > 0) {
+        it_map_all_points = all_points.begin(); // first tile remaining in all_points
+        /************ for each tile that are not in the clusters ************/
+        for (int i = 0; i < all_points.size(); i++) {
+            if (it_map_all_points != all_points.end()) {
+                if (!(it_map_all_points -> second).size()) {
+                    cerr << "Bad all_points structure" << endl;
+                    outfile.clear();
+                    outfile.close();
+                    return -3;
+                }
+                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
+                /************ for each point in the tiles that are not in the clusters ************/
+                for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
+                    outfile << (*it_set_all_points)[0] << ",";
+                    outfile << (*it_set_all_points)[1] << ",";
+                    outfile << 0 <<endl;
+                    it_set_all_points++;
+                    count_not_clustered++;
+                }
+                it_map_all_points++;
             }
-            it_map_all_points++;
         }
     }
+
     outfile.close();
-    cout << "Total points not clustered: " << count_not_clustered << endl;
+    cout << "Points not clustered: " << count_not_clustered << endl;
+    cout << "Points clustered: " << count_points << endl;
+    cout << "Total points analyzed " << count_points + count_not_clustered << endl;
     cout << "Tile not clustered: " << all_points.size() << endl;
     cout << "Tiles clustered: " << count_tiles << endl;
     cout << "Clusters: " << clusters.size() << endl;
-    cout << "Points clustered: " << count_points << endl;
-    cout << "Points analyzed " << count_points + count_not_clustered << endl;
+
+    return 0;
 }
 /**
  * These declarations are necessary for compiler in order to correctly link
  * the header of a function with its implementation in presence of a template
  */
-template void newPrintAllPointsClustered<array<int, 3>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
-template void newPrintAllPointsClustered<array<int, 2>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+template int printAllPointsClustered<array<int, 3>>(vectorSet3 &clusters, hashmapUnset &all_points);
+template int printAllPointsClustered<array<int, 2>>(vectorSet2 &clusters, hashmapUnset &all_points);
 
 
 // under the function there are the two variants of T type
 template <typename T>
-void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID) {
+int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID) {
+    if (clusters.size() <= 0) {
+        cerr << "Bad clusters data structure" << endl;
+        return -2;
+    }
+
     ofstream outfile(to_string(peerID) +".csv");
+    if (!outfile.is_open()) {
+        cerr << "Can't open/create file: " << to_string(peerID) +".csv" << endl;
+        return -1;
+    }
     cout <<  "n° cluster: " << clusters.size() << endl;
     typename unordered_set<T, container_hasher>::iterator it;
 
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
         outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
+        if (!clusters.at(j).size()) {
+            cerr << "Bad cluster structure" << endl;
+            outfile.clear();
+            outfile.close();
+            return -3;
+        }
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
             count_tiles++; // count the total number of tiles clustered
@@ -543,34 +496,66 @@ void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, 
     outfile.close();
     cout << "Tiles clustered: " << count_tiles << endl;
 
+    return 0;
+
 }
 /**
  * These declarations are necessary for compiler in order to correctly link
  * the header of a function with its implementation in presence of a template
  */
-template void genericPrintClusters<array<int, 3>>(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
-template void genericPrintClusters<array<int, 2>>(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
+template int printClusters<array<int, 3>>(vectorSet3 &clusters, int peerID);
+template int printClusters<array<int, 2>>(vectorSet2 &clusters, int peerID);
 
-void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters,
-                    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points,
-                    double precision) {
+int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double precision) {
+
     double scalar = pow(10, precision);
     double area = scalar * scalar;
-    double* shannon = new double[clusters.size()];
-    double* density = new double[clusters.size()];
-    double* size_cluster = new double[clusters.size() * sizeof(double)];
-    double pji; // probability that a point is in the i-th tile of the j-th cluster
-    unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher>::iterator it_map_all_points;
+    double mean_shannon;
+    double mean_density;
+    hashmapUnset::iterator it_map_all_points;
     unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
-    unordered_set<array<int, 2>, container_hasher>::iterator it_tiles;
+    unSet2::iterator it_tiles;
 
-    double** tile_points = new double*[clusters.size()];
+    double* shannon = nullptr;
+    double* density = nullptr;
+    double* size_cluster = nullptr;
+    double** tile_points = nullptr;
+
+    shannon = new (nothrow) double[clusters.size()];
+    if(!shannon){
+        cout << "Not enough memory" << endl;;
+        return -2;
+    }
+
+
+    density = new (nothrow) double[clusters.size()];
+    if(!density){
+        cout << "Not enough memory" << endl;;
+        goto ON_EXIT;
+    }
+
+
+    size_cluster= new (nothrow) double[clusters.size() * sizeof(double)];
+    if(!size_cluster){
+        cout << "Not enough memory" << endl;;
+        goto ON_EXIT;
+    }
+    double pji; // probability that a point is in the i-th tile of the j-th cluster
+
+
+
+    tile_points = new (nothrow) double*[clusters.size()];
+    if(!tile_points){
+        cout << "Not enough memory\n";
+        goto ON_EXIT;
+    }
     // allocating vectors that will contain n° of points for each tile i of respective cluster j
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
-        tile_points[j] = new double[clusters.at(j).size()];
+        tile_points[j] = new (nothrow) double[clusters.at(j).size()];
         if (!tile_points[j]) {
-            cout << "error at: " << j << endl;
+            cout << "Not enough memory allocating the " << j << "-th tile_points array" << endl;
+            goto ON_EXIT;
         }
     }
 
@@ -601,8 +586,8 @@ void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clu
         density[j] = size_cluster[j]/(clusters.at(j).size() * area);
     }
 
-    double mean_shannon = 0;
-    double mean_density = 0;
+    mean_shannon = 0;
+    mean_density = 0;
     for (int j = 0; j < clusters.size(); j++) {
         mean_shannon += shannon[j];
         mean_density += density[j];
@@ -613,5 +598,25 @@ void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clu
 
     cout << "Shannon mean: " << mean_shannon << endl;
     cout << "Density mean: " << mean_density << endl;
+
+    ON_EXIT:
+
+    if(shannon != nullptr)
+        delete[] shannon, shannon = nullptr;
+
+    if(density != nullptr)
+        delete[] density, density = nullptr;
+
+    if(size_cluster != nullptr)
+        delete[] size_cluster, size_cluster = nullptr;
+
+    for(int x = 0; x < clusters.size(); x++)
+        if(tile_points[x] != nullptr)
+            delete[] tile_points[x], tile_points[x] = nullptr;
+
+    if(tile_points != nullptr)
+        delete[] tile_points, tile_points = nullptr;
+
+    return 0;
 }
 

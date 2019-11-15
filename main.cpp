@@ -402,7 +402,7 @@ int main(int argc, char **argv) {
     int start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
         /*** points projection ***/
-        mapToTilesNoThreshold(dataset, precision, projection[peerID], start, peerLastItem[peerID]);
+        mapToTiles(dataset, precision, projection[peerID], start, peerLastItem[peerID]);
 
         start = peerLastItem[peerID] + 1;
     }
@@ -508,12 +508,9 @@ int main(int argc, char **argv) {
                 else
                     convRounds[peerID] = 0;
 
-                //printf ("PeerID %d, round %d, convRound %d\n", peerID, rounds, convRounds[peerID]);
-
 
                 converged[peerID] = (convRounds[peerID] >= params.convLimit);
                 if(converged[peerID]){
-                    //printf("peer %d rounds before convergence: %d\n", peerID, rounds + 1);
                     Numberofconverged --;
                 }
             }
@@ -530,24 +527,26 @@ int main(int argc, char **argv) {
         cout << "Time (seconds) required by merge Raster projection: " << mergeprojectiontime << endl;
     }
 
-    /*** Get dimestimate***/
+    /*** Each peer update dimestimate***/
     for(int peerID = 0; peerID < params.peers; peerID++) {
         dimestimate[peerID] = round(1 / dimestimate[peerID]);
     }
-
-    /*** Each peer remove tiles < threshold ***/
+    /*** Each peer restore tiles cardinality***/
     for(int peerID = 0; peerID < params.peers; peerID++){
         unordered_map<array<int, 2>, double, container_hasher>::iterator it;
         it = projection[peerID].begin();
         while (it != projection[peerID].end()) {
-            it -> second = round(it->second *dimestimate[peerID]);
-            if (it -> second < threshold) {
-                projection[peerID].erase(it++);
-            } else {
-                it++;
-            }
+            it->second = round(it->second * dimestimate[peerID]);
+            it++;
         }
     }
+
+    /*** Each peer remove tiles < threshold ***/
+    for(int peerID = 0; peerID < params.peers; peerID++){
+        projectionThreshold(projection[peerID], threshold);
+    }
+
+
     if (params.typeAlgorithm == 0) {
         /*** Simultaneous minimum and maximum algorithm***/
         int *minX;
@@ -574,8 +573,8 @@ int main(int argc, char **argv) {
             printOrderedProjection(peerID, params.peers, projection[peerID]);
         }*/
 
-        // (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
-        // (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
+        /// (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
+        /// (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
         /*** x1,x2,y1,y2 are matrices with dimension of n° peers x squares[peerID] (some peer can have an extra square from checkerboard partition) ***/
         int** y1;
         int** x1;
@@ -591,7 +590,7 @@ int main(int argc, char **argv) {
             exit(-1);
         }
 
-        // domain of dataset is divide in a grid p*q
+        /// domain of dataset is divide in a grid p*q
         int* q;
         int* p;
         try {
@@ -601,7 +600,7 @@ int main(int argc, char **argv) {
             cerr << "bad_alloc caught: " << ba.what() << '\n';
             exit(-1);
         }
-        // how much square for each peer ( if p*q % peers != 0 some peers will have one more square)
+        /// how much square for each peer ( if p*q % peers != 0 some peers will have one extra square)
         int* squares;
         try {
             squares = new int[params.peers];
@@ -612,7 +611,7 @@ int main(int argc, char **argv) {
         /**!< minimun squares for each peer from checkerboard partition*/
         int min =1; // set as input parameter?
 
-        // initial hypothesis, later each peer check if have an extra square
+        /// initial hypothesis, later each peer check if have an extra square
         for (int i = 0; i < params.peers; i++) {
             squares[i] = min;
         }
@@ -620,17 +619,17 @@ int main(int argc, char **argv) {
         /*** Each peer obtain its "square(s)" coordinate(s)***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             int a, b, restA, restB;
-            // find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
+            /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
             getGridSize(&p[peerID], &q[peerID],(int) dimestimate[peerID], squares[peerID]);
 
-            // compute how much tiles for each square on y (a) and x (b) axis
+            /// compute how much tiles for each square on y (a) and x (b) axis
             a =     (maxY[peerID]-minY[peerID]) / q[peerID];
             b =     (maxX[peerID]-minX[peerID]) / p[peerID];
             restA = (maxY[peerID]-minY[peerID]) % q[peerID];
             restB = (maxX[peerID]-minX[peerID]) % p[peerID];
             //cout << "peer: " << peerID << endl;
 
-            // i, j coordinate in grid p*q,
+            /// i, j coordinate in grid p*q,
             int *i, *j;
             if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
                 squares[peerID]++; // extra square for some peers
@@ -663,7 +662,7 @@ int main(int argc, char **argv) {
                 x1[peerID][k] = j[k] <= restB ? j[k]*(b+1) + minX[peerID] : restB*(b+1) + (j[k]-restB)*b + minX[peerID];
                 y2[peerID][k] = (i[k] <= restA && restA != 0) ? y1[peerID][k] - (a+1) : y1[peerID][k] - (a);
                 x2[peerID][k] = (j[k] <= restB  && restB != 0) ? x1[peerID][k] - (b+1) : x1[peerID][k] - (b);
-                // include the left and bottom edge of grid
+                /// include the left and bottom edge of grid
                 if (y2[peerID][k] == minY[peerID])
                     y2[peerID][k] -= 1;
 
@@ -807,7 +806,6 @@ int main(int argc, char **argv) {
             memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(double));
 
             for(int peerID = 0; peerID < params.peers; peerID++){
-                // check peer convergence
 
                 // determine peer neighbors
                 igraph_vector_t neighbors;
@@ -854,12 +852,8 @@ int main(int argc, char **argv) {
                     else
                         convRounds[peerID] = 0;
 
-                    //printf ("PeerID %d, round %d, convRound %d\n", peerID, rounds, convRounds[peerID]);
-
-
                     converged[peerID] = (convRounds[peerID] >= params.convLimit);
                     if(converged[peerID]){
-                        //printf("peer %d rounds before convergence: %d\n", peerID, rounds + 1);
                         Numberofconverged --;
                     }
                 }
@@ -878,19 +872,18 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            genericPrintClusters(clusters[peerID], peerID);
+            printClusters(clusters[peerID], peerID);
         }
         cout << "\n\n";
 
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
         mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
-        newPrintAllPointsClustered(clusters[0], all_points);
+        printAllPointsClustered(clusters[0], all_points);
 
         delete[] prevclustersestimate;
-
-
     } else {
+
         vector<unordered_set<array<int, 2>, container_hasher>> *clusters;
         try {
             clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
@@ -901,7 +894,6 @@ int main(int argc, char **argv) {
         if (!outputOnFile) {
             cout <<"\nEach peer clustering the global projection..." << endl;
         }
-
 
         StartTheClock();
 
@@ -918,14 +910,14 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            genericPrintClusters(clusters[peerID], peerID);
+            printClusters(clusters[peerID], peerID);
         }
         cout << "\n\n";
 
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
         mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
-        newPrintAllPointsClustered(clusters[0], all_points);
+        printAllPointsClustered(clusters[0], all_points);
     }
 
 
@@ -939,8 +931,6 @@ int main(int argc, char **argv) {
 
 
 }
-
-
 
 int manhattanDistance(int x1, int x2, int y1, int y2) {
     return abs(x1-x2) + abs(y1-y2);
@@ -1073,11 +1063,14 @@ void getGridSize(int *p, int *q, int peers, int min) {
     }
 }
 /**
- * First while find common tiles between two projection and compute the average cardianlity,
- * furthermore add into projectionP the tiles that are present only in projectionN, in this
- * case the cardinality is divided by 2.
- * The second while instead find all the tiles that are present in projectionP but not in projectionN
- * and add to it. Also in this case the cardinality is divided by 2.
+ * The first while iterates on all neighbor tiles, if a tile is yet present
+ * into peer tiles, add the two cardinality, if not insert the tile into
+ * peer projection. At the end of the while, peer contains in its hasmap all
+ * commons tile with the sums of cardinality, the tiles that was in neighbor
+ * but not in peer and the tiles that was in peer but not in neighbor.
+ * Now is sufficient with the second while iterate on peer projection
+ * and divide by two all tiles cardinality to get the average for each
+ * tile in a linear time (include common and uncommon tiles)
  */
 void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &projectionN, unordered_map<array<int, 2>, double, container_hasher> &projectionP){
     unordered_map<array<int, 2>, double, container_hasher>::iterator itN;
@@ -1087,29 +1080,24 @@ void projectionMerge(unordered_map<array<int, 2>, double, container_hasher> &pro
     while (itN != projectionN.end()) {
         itP = projectionP.find(itN -> first);
         if (itP != projectionP.end()) { // tile is common
-            average(&itP->second, &itN->second);
-            memcpy(&itN->second, &itP->second, sizeof(double));
+            itP -> second += itN->second;
         } else {
-            projectionP[itN -> first] = (itN->second) / 2.0;
-            average(&itN->second, nullptr);
+            projectionP[itN -> first] = (itN->second);
         }
         itN++;
     }
     itP = projectionP.begin();
     while (itP != projectionP.end()) {
-        itN = projectionP.find(itP -> first);
-        if (itN == projectionN.end()) {
-            projectionN[itP -> first] = (itP->second) / 2.0;
-            average(&itP->second, nullptr);
-        }
+        itP -> second /= 2;
         itP++;
     }
+    projectionN = projectionP;
 }
 /**
  * This function use an hashmap to merge in linear time 2 clusters with dimension m and n.
  * A naive method check all m tiles of first cluster with all n tiles of second clusters
  * with a complexity O(n*m) in worst case.
- * If we assume that we can insert and find an element in the hashmap in time O(1),
+ * If we assume that we can insert and find an element in the hashmap in time O(1) in average case,
  * the first for cycle insert in time O(m) all tiles using as key only the coordinate.
  * The second for cycle try to find the n tiles into the hashmap, it will cost O(n).
  * If is not present add it to the hashmap, also in this case the add operation
@@ -1161,7 +1149,7 @@ void clustersMerge(vector<unordered_set<array<int, 3>, container_hasher>> &clust
         exit(-1);
     }
 
-    int tmpSize = centroidsP.size(); // get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
+    int tmpSize = centroidsP.size(); /// get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
     for (int k = 0; k < centroidsN.size(); k++) {
         for (int l = 0; l < tmpSize; l++) {
             if (manhattanDistance(centroidsN.at(k)[0], centroidsP.at(l)[0], centroidsN.at(k)[1], centroidsP.at(l)[1]) <= maxDistance) {

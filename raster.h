@@ -18,6 +18,8 @@
 #include <unordered_set>
 
 using namespace std;
+
+
 #ifndef P2PRASTER_RASTER_H
 #define P2PRASTER_RASTER_H
 
@@ -42,6 +44,14 @@ struct container_hasher {
     }
 };
 
+typedef unordered_map<array<int, 2>, double, container_hasher> hashmap;
+typedef vector<unordered_set<array<int, 2>, container_hasher>> vectorSet2;
+typedef vector<unordered_set<array<int, 3>, container_hasher>> vectorSet3;
+typedef unordered_set<array<int, 2>, container_hasher> unSet2;
+typedef unordered_set<array<int, 3>, container_hasher> unSet3;
+typedef unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> hashmapUnset;
+
+
 /**
  * THis function use template in order to use an only function to print both type of cluster
  * that can be used in the two different type of algorithm in the main function. This function
@@ -51,12 +61,13 @@ struct container_hasher {
  * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
  * @param [in] clusters - Data structure which contains clusters to print
  * @param [in] peerID - Peer id that want to write on file
+ * @return 0 in case of success, -1 in case of open file error, -2 in case of bad clusters structure, -3 in case of bad cluster
  */
 template <typename T>
-void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID);
+int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID);
 
 /**
- * THis function use template in order to use an only function to print both type of cluster
+ * THis function use template in order to use an only function to print both type of clusters
  * that can be used in the two different type of algorithm in the main function. This function
  * can take as argument both type of cluster and print on file named clustered.csv all dataset
  * point with its clusters. Any point not clustered is assigned at cluster 0.
@@ -64,9 +75,10 @@ void genericPrintClusters(vector<unordered_set<T, container_hasher>> &clusters, 
  * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
  * @param clusters - Data structure which contains clusters to print
  * @param all_points - Data structure which contains the mapping tiles-points
+ * @return 0 in case of success, -1 in case of open file error, -2 in case of bad clusters structure, -3 in case of bad all_points structure, -4 in case of bad cluster
  */
 template <typename T>
-void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
 
 
 /**
@@ -75,7 +87,7 @@ void newPrintAllPointsClustered(vector<unordered_set<T, container_hasher>> &clus
  * @param [in] name_file - The input file name
  * @param [in,out] row - Number of csv rows
  * @param [in,out] column - Number of csv columns
- * @return Return 0 if success, -1 in case of error
+ * @return Return 0 if success, -1 in case of read file error
  */
 int getDim(string name_file, int &row, int &column);
 
@@ -86,37 +98,38 @@ int getDim(string name_file, int &row, int &column);
  * @param [in,out] m - Matrix where load dataset
  * @param [in] name_file - Name of dataset file
  * @param [in] column - Number of file column
- * @return Return 0 if success, -1 in case of error
+ * @return Return 0 if success, -1 in case of read file error, -2 in case of read NaN
  */
-
 int loadData(double **m, string name_file, int column);
 
 /**
  * This functions uses a simple for cycle in order to obtains the key of the neighbors of coordinate in input,
- * then search this neighbors into projection and return the results into result
+ * then search this neighbors into projection and add them into result
  *
  * @param [in] coordinate - Coordinate of tile of which we want to obtain its neighbors
  * @param [in,out] projection - Data structure contains all tiles where search the tile's neighbors
  * @param [in,out] result - Contains all tile's neighbors found into projection
- * @result Move the neighbors found from projection to result
+ * @return 0 in case of success
  */
-void getNeighbors(array<int, 2> coordinate, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 2>, container_hasher> &result);
+int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result);
 
 /**
  * This functions uses a simple for cycle in order to obtains the key of the neighbors of coordinate in input,
- * then search this neighbors into projection and squareProjection and return the results into result
+ * then search this neighbors into projection and squareProjection and add them to result
  *
  * @param [in] coordinate - Coordinate of tile of which we want to obtain its neighbors and its cardinality
  * @param [in,out] squareProjection - Data structure contains all peer's tiles where search the tile's neighbors
  * @param [in,out] projection - Data structure contains all remaining tiles where search the tile's neighbors
  * @param [in,out] result - Contains all tile's neighbors found into projection or squareProjection
- * @result Move the neighbors found from projection or squareProjection to result
+ * @return 0 in case of success
  */
-void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_set<array<int, 3>, container_hasher> &result);
+
+int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &projection, unSet3 &result);
 
 /**
  * This function performs the first step of raster projection, it simple multiply
  * the points for a scalar and maintains only the integer part of the product,
+ * then save into projection the tiles and count its occurrences
  * Note: this function don't apply the threshold to the tiles
  *
  * @param [in] m - Dataset
@@ -124,15 +137,15 @@ void getNeighbors(array<int, 3> coordinate, unordered_map<array<int, 2>, double,
  * @param [in,out] projection - Data structure where save the projection result of raster algorithm
  * @param [in] start - First point in the dataset of peer
  * @param [in] end - Last point in the dataset of peer
- * @result Save into projection the tiles with its cardinality
+ * @return 0 in case of success, -1 in case of insert error
  */
-void mapToTilesNoThreshold(double **m, double precision, unordered_map<array<int, 2>, double, container_hasher> &projection, int start, int end);
+int mapToTiles(double **m, double precision, hashmap &projection, int start, int end);
 
 /**
  * This function implements the raster' variant of the algorithm.
- * During the projection phase, using an hashmap keeps track of the
- * associations tile-point using the tile as key and a list the relative
- * associated points as value
+ * During the projection phase, using an hashmap to keeps track of the
+ * associations tile-point using the tile as key and as value a list
+ * with relative associated points
  *
  * @param [in] m - Dataset
  * @param [in] precision - Parameter for raster algorithm (it is the value for the approximation)
@@ -140,80 +153,59 @@ void mapToTilesNoThreshold(double **m, double precision, unordered_map<array<int
  * @param [in] n - Number of points in Dataset
  * @param [in,out] projection - Data structure where save the projection result of raster algorithm
  * @param [in,out] all_points - Data structure where save the mapping tiles-points
+ * @return 0 in case of success, -1 in case of find error, -2 in case of insert error
  */
-void mapToTilesPrime(double **m, double precision, int threshold, int n, unordered_map<array<int, 2>, double, container_hasher> &projection, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap &projection, hashmapUnset &all_points);
 
 /**
- * This function take one-by-one each tile in projection, try to find its neighbor
- * (always in projection) and form a cluster with these adjacent tiles.
- * If the cluster has a number of tiles < min_size it is discarded
+ * This function remove from projection structure all tiles with
+ * cardinality < threshold
+ *
+ * @param [in,out] projection - Data structure with all tiles
+ * @param [in] threshold - Parameter for raster algorithm (all tiles with cardinality < threshold are delete)
+ * @return 0 if success
+ */
+int projectionThreshold(hashmap &projection, int threshold);
+
+
+/**
+ * This function take one by one each tile in projection, try to find its neighbors
+ * (in projection) and form a cluster with these adjacent tiles.
+ * If the cluster has a number of tiles < min_size it is discarded or
+ * add it into clusters structure
  *
  *
  * @param [in,out] projection - Data structure with tiles
  * @param [in] min_size - Parameter for raster algorithm (it is the minimum number of tiles in order to form a cluster)
  * @param [in,out] clusters - Data structure where save the clusters found
- * @result Save into clusters the clusters found
+ * @return 0 in case of success, -1 in case of bad projection structure, -2 in case of insert error
  */
-void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 2>, container_hasher>> &clusters);
+int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters);
 
 /**
+ * This function take one by one each tile in squareProjection, try to find its neighbor
+ * (in squareProjection and projection) and form a cluster with these adjacent tiles.
+ * If the cluster has a number of tiles < min_size it is discarded or
+ * add it into clusters structure
  *
  * @param [in,out] squareProjection - Data structure with peer's tiles
  * @param [in,out] projection - Data structure with remaining tiles
  * @param [in] min_size - Parameter for raster algorithm (it is the minimum number of tiles in order to form a cluster)
  * @param [in,out] clusters - Data structure where save the clusters found
- * @result Save into clusters the clusters found
+ * @return 0 in case of success, -1 in case of bad projection structure, -2 in case of insert error
  */
-void clusteringTiles(unordered_map<array<int, 2>, double, container_hasher> &squareProjection, unordered_map<array<int, 2>, double, container_hasher> &projection, int min_size, vector<unordered_set<array<int, 3>, container_hasher>> &clusters);
+int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters);
 
 /**
- * this function print on terminal the total number of tiles clustered,
- * Print also information about cluster and their
- * tiles in a csv file name with peerId.csv
- *
- * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] peerID - (optional) Peer id that want to write on file
- */
-void printClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, int peerID);
-
-/**
- * This function differ from above function in cluster structure,
- * here clusters maintain information about tiles cardinality
- *
- * @param [in] clusters - Data structure which contains clusters to print
- * @param [in] peerID - (optional) Peer id that want to write on file
- */
-void printClusters(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, int peerID);
-
-/**
- * This function using a data structure from raster' variant, print all clusters
- * with all relative point. All points not clustered are assign at the cluster 0.
- *
- * @param [in] clusters - Data structure which contains clusters to print
- * @param all_points - Data structure which contains mapping tile-points for raster prime' variant
- */
-void printAllPointsClustered(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
-
-/**
- * This function differ from above function in cluster structure,
- * here clusters maintain information about tiles cardinality
- *
- * @param [in] clusters - Data structure which contains clusters to print
- * @param all_points - Data structure which contains mapping tile-points for raster prime' variant
- */
-void printAllPointsClustered(vector<unordered_set<array<int, 3>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
-
-
-
-// Remove?
-/**
+ * This function compute the mean Shannon entropy and mean Density for each cluster
+ * and print the results on terminal
  *
  * @param [in] clusters - Data structure which contains clusters
  * @param [in] all_points - Data structure which contains mapping tile-points for raster prime' variant
  * @param [in] precision - Parameter for raster algorithm
- * @result Print on terminal the mean Shannon entropy and mean Density for each cluster
+ * @return 0 if success, -1 in case of error on allocation memory
  */
-void analyzeClusters(vector<unordered_set<array<int, 2>, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, double precision);// raster'
+int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double precision);// raster'
 
 
 

@@ -42,6 +42,17 @@ int dataError(string nameFunction) {
 /**
  *
  * @param [in] nameFunction - Name of the calling function
+ * @return -4
+ */
+int arithmeticError(string nameFunction) {
+    cerr << nameFunction << ": Arithmetic Error" << endl;
+    return -4;
+}
+
+
+/**
+ *
+ * @param [in] nameFunction - Name of the calling function
  * @return -7
  */
 int fileError(string nameFunction) {
@@ -78,5 +89,11 @@ int findError(string nameFunction) {
     cerr << nameFunction << ": Find Error" << endl;
     return -10;
 }
+
+int mergeError(string nameFunction) {
+    cerr << nameFunction << ": Find Error" << endl;
+    return -11;
+}
+
 
 

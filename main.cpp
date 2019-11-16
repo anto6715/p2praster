@@ -7,6 +7,7 @@
 #include "raster.h"
 #include "error.h"
 
+
 /**
  * This function compute the Manhattan distance between two points p1,p2
  * with coordinate (x1,y1) and (x2,y2):
@@ -20,15 +21,17 @@
  */
 int manhattanDistance(int x1, int x2, int y1, int y2);
 
+
 /**
  * This function compute the centroids for each clusters using a weighted average.
  * Save into centroids[i] the centroid of clusters[i] (for each cluster in clusters)
  *
  * @param [in] clusters - Data structure which contains clusters
  * @param [in,out] centroids - Data structure where insert centroid of respectively cluster
- * @return 0 if success, -1 in case of bad clusters structure, -2 in case of bad cluster structure
+ * @return 0 if success, -3 in case of bad data structures,
  */
 int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids);
+
 
 /**
  * This function get cluster from peer and its neighbor and do the union.
@@ -43,9 +46,10 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids);
  * @param [in,out] centroidsN - Data structure which contains centroids of peer's neighbor
  * @param [in,out] centroidsP - Data structure which contains centroids of peer
  * @param [in] maxDistance - Max distance to consider two cluster similar
- * @return 0 if success, -1 in case of memory error, -2 in case of cluster union error
+ * @return 0 if success, -1 in case of memory error, -25 in case of cluster union error
  */
 int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance);
+
 
 /**
  * This function merge two cluster that are similar but not equal,
@@ -54,11 +58,12 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
  *
  * @param [in,out] clusterN - Data structure which contains cluster of peer's neighbor
  * @param [in,out] clusterP - Data structure which contains cluster of peer
- * @return 0 if success, -1 in case of bad clusters structure, -2 in case of insert error, -3 in case of arithmetic error
+ * @return 0 if success, -3 in case of bad data structures, -2 in case of insert error, -4 in case of arithmetic error
  */
 int clusterUnion(unSet3 &clusterN, unSet3 &clusterP);
 // to delete
 void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
+
 
 /**
  * This function implements the simultaneous Max and Min algorithm on both x and y axes
@@ -68,9 +73,10 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
  * @param [in,out] minX - Where save min value for tile x coordinates
  * @param [in,out] maxY - Where save max value for tile y coordinates
  * @param [in,out] minY - Where save min value for tile y coordinates
- * @return 0 if success, -1 in case of bad projection structure
+ * @return 0 if success, -3 in case of bad data structure
  */
 int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int *minY);
+
 
 /**
  * This function compute the parameter p and q to obtain a checkerboard partition (with grid p x q)
@@ -83,7 +89,8 @@ int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int
  * @param [in] min - Min square for each peer
  * @return 0 if success
  */
-int getGridSize(int *p, int * q, int peers, int min);
+int getGridSize(int &p, int &q, int peers, int min);
+
 
 /**
  * This function merge the tiles of two structures. If a tile is common,
@@ -93,9 +100,10 @@ int getGridSize(int *p, int * q, int peers, int min);
  *
  * @param projectionN - Data structure with peer neighbor tiles
  * @param projectionP - Data structure with  peer tiles
- * @return 0 if success, -1 in case of insert error, -2 in case of bad projections structure
+ * @return 0 if success, -2 in case of insert error, -3 in case of bad data structure
  */
 int projectionMerge(hashmap &projectionN, hashmap &projectionP);
+
 
 /**
  * This function compute the average between two double.
@@ -104,7 +112,7 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP);
  *
  * @param x - First number that will be update
  * @param y - Second number
- * @return 0 if success, -1 if x is invalid
+ * @return 0 if success, -4 if x is invalid
  */
 int average(double *x, double y);
 
@@ -115,20 +123,86 @@ int average(double *x, double y);
  * @param [in] dataset - Array of pointer that pints at dataset_storage
  * @param [in] name_file - Name input file
  * @param [in,out] ni - Nu,ber of points
- * @return 0 if success, -1 in case of memory error, -2 in case of input file error
+ * @return 0 if success, -1 in case of memory error, -7 in case of input file error
  */
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni);
 
+
+/**
+ * This function compute the last item of the dataset for each peer.
+ * Peer with i will obtain all data from peerLastItem[i-1] and peerLastItem[i]
+ *
+ * @param [in,out] peerLastItem - Data structure where save the result
+ * @param [in] peers - Number of peers
+ * @param [in] ni - NUmber of points into dataset
+ * @return 0 if success
+ */
 int partitionDataset(long *peerLastItem, int peers, int ni);
 
+
+/**
+ * This function check if previous dataset partition is correct
+ *
+ * @param peerLastItem - Data structure
+ * @param [in] peers - Number of peers
+ * @param [in] ni - NUmber of points into dataset
+ * @return 0 if success, -9 in case of partition error
+ */
 int checkPartitioning(long *peerLastItem, int peers, int ni);
 
+
+/**
+ *
+ * @param graph - Structure where save graph generated
+ * @param peers - Number of peers
+ * @param graphType - Type of graph
+ * @return 0 if success
+ */
+int generateGraph(igraph_t &graph, int peers, int graphType);
+
+/**
+ * This function print on terminal tha minimum and maximum vertex degree
+ *
+ * @param graph - Structure that contains graph
+ * @return
+ */
+int graphProperties(igraph_t &graph);
+
+
+/**
+ * This function return the number of neighbor of calling peer,
+ * if this fanOut < neighborSize then return fanOut and remove
+ * randomly (neighborsSize - fanOut) neighbors from neighbors structure.
+ * If fanOut = -1 return neighborsSize.
+ *
+ * @param [in] graph
+ * @param [in,out] neighbors
+ * @param [in] peerID
+ * @param [in] fanOut
+ * @return The dimension of neighbors
+ */
+int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int peerID, int fanOut);
+
+
+int checkFirstConvegence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged);
+
+
+int restoreCardinality(hashmap &projection, int dimestimate);
+
+int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY,
+                    int q, int p, int minX, int minY, int maxX, int maxY );
+
+int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minSquares);
+
+int getSquaresCoordinate(int &x1, int &y1, int &y2, int &x2, int p, int q, int dimestimate,
+                         int minX, int minY, int maxX, int maxY, int k, int peerID);
 
 
 /**
  * When called save the actual time into global variable t1
  */
 void StartTheClock();
+
 
 /**
  * When called save the actual time into gloab variable t2
@@ -137,11 +211,13 @@ void StartTheClock();
  */
 double StopTheClock();
 
+
 /**
  * Print on terminal the input parameter accepted
  * @param cmd - Name of script
  */
 void usage(char* cmd);
+
 igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius);
 igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A);
 igraph_t generateErdosRenyiGraph(igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param);
@@ -167,6 +243,7 @@ struct Params {
     int         threshold;         /*!< Raster parameters that establish if maintain or not a tile */
     int         min_size;          /*!< Raster parameters that establish the minimum number of tile in order to form a cluster */
     int         maxDistance;       /*!< Max distance in order to consider two cluster the same */
+    int         minSquares;        /*!< minimum squares for each peer from checkerboard partition*/
     string      name_file;         /*!< The path for the input CSV file */
     int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
 };
@@ -195,6 +272,7 @@ int main(int argc, char **argv) {
     int         radius = 0;
     int         maxDistance = 2;
     int         typeAlgorithm = 0;
+    int         minSquares = 1;
     string      name_file = "../Datasets/S-sets/s1.csv";
 
     bool            outputOnFile = false;
@@ -202,11 +280,29 @@ int main(int argc, char **argv) {
     igraph_t        graph;
     Params          params;
 
+    int start;
+
     /*** Array declarations ***/
     long *peerLastItem = nullptr; // index of a peer last item
     double *dataset_storage = nullptr;
     double **dataset = nullptr;
-
+    hashmap *projection = nullptr;
+    double *dimestimate = nullptr;
+    double *prevestimate = nullptr;
+    bool *converged = nullptr;
+    int *convRounds = nullptr;
+    int *minX = nullptr;
+    int *minY = nullptr;
+    int *maxX = nullptr;
+    int *maxY = nullptr;
+    int** y1 = nullptr;
+    int** x1 = nullptr;
+    int** y2 = nullptr;
+    int** x2 = nullptr;
+    int* q = nullptr;
+    int* p = nullptr;
+    int* squares = nullptr;
+    hashmap *squareProjection = nullptr;
 
     /*** parse command-line parameters ***/
     for (int i = 1; i < argc; ++i) {
@@ -332,6 +428,7 @@ int main(int argc, char **argv) {
     params.radius = radius;
     params.maxDistance = maxDistance;
     params.typeAlgorithm = typeAlgorithm;
+    params.minSquares = minSquares;
 
     outputOnFile = !params.outputFilename.empty();
 
@@ -340,15 +437,9 @@ int main(int argc, char **argv) {
     }
 
     /** Graph generation */
-    // turn on attribute handling in igraph
-    igraph_i_set_attribute_table(&igraph_cattribute_table);
-
-    // seed igraph PRNG
-    igraph_rng_seed(igraph_rng_default(), 42);
-
     StartTheClock();
     // generate a connected random graph
-    graph = generateRandomGraph(params.graphType, params.peers);
+    generateGraph(graph, peers, params.graphType);
 
     double gengraphtime = StopTheClock();
     if (!outputOnFile) {
@@ -356,34 +447,23 @@ int main(int argc, char **argv) {
     }
 
     // determine minimum and maximum vertex degree for the graph
-    igraph_vector_t result;
-    igraph_real_t mindeg;
-    igraph_real_t maxdeg;
-
-    igraph_vector_init(&result, 0);
-    igraph_degree(&graph, &result, igraph_vss_all(), IGRAPH_ALL, IGRAPH_NO_LOOPS);
-    igraph_vector_minmax(&result, &mindeg, &maxdeg);
-    if (!outputOnFile) {
-        cout << "Minimum degree is "  <<  mindeg << ", Maximum degree is " << maxdeg << "\n";
-    }
+    graphProperties(graph);
 
     /*** Apply first Raster projection to each peer's dataset ***/
     if (!outputOnFile) {
         cout << "\nApply first Raster projection to each peer's dataset...\n";
     }
-    unordered_map<array<int, 2>, double, container_hasher> *projection;
-    try {
-        projection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
+
+    projection = new (nothrow) unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+    if(!projection)
+        return memoryError(__FUNCTION__);
+
     StartTheClock();
-    int start = 0;
+
+    start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
         /*** points projection ***/
         mapToTiles(dataset, precision, projection[peerID], start, peerLastItem[peerID]);
-
         start = peerLastItem[peerID] + 1;
     }
 
@@ -394,42 +474,27 @@ int main(int argc, char **argv) {
     }
 
     // this is used to estimate the number of peers
-    double *dimestimate;
-    try {
-        dimestimate = new double[params.peers]();
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
+    dimestimate = new (nothrow) double[params.peers]();
+    if (!dimestimate)
+        return memoryError(__FUNCTION__);
     dimestimate[0] = 1;
 
-    double *prevestimate;
-    try {
-        prevestimate = new double[params.peers]();
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
+    prevestimate = new (nothrow) double[params.peers]();
+    if (!prevestimate)
+        return memoryError(__FUNCTION__);
 
     int Numberofconverged = params.peers;
 
-    bool *converged;
-    try {
-        converged = new bool[params.peers]();
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
+    converged = new (nothrow) bool[params.peers]();
+    if (!converged)
+        return memoryError(__FUNCTION__);
+
     for(int i = 0; i < params.peers; i++)
         converged[i] = false;
 
-    int *convRounds;
-    try {
-        convRounds = new int[params.peers]();
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
+    convRounds = new (nothrow) int[params.peers]();
+    if (!convRounds)
+        return memoryError(__FUNCTION__);
 
     int rounds = 0;
 
@@ -447,20 +512,17 @@ int main(int argc, char **argv) {
             igraph_vector_t neighbors;
             igraph_vector_init(&neighbors, 0);
             igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
-            long neighborsSize = igraph_vector_size(&neighbors);
-            if(fanOut < neighborsSize && fanOut != -1){
-                // randomly sample f adjacent vertices
-                igraph_vector_shuffle(&neighbors);
-                igraph_vector_remove_section(&neighbors, params.fanOut, neighborsSize);
-            }
 
-            neighborsSize = igraph_vector_size(&neighbors);
+            long neighborsSize = getNeighborsSize(graph, neighbors, peerID, fanOut);
+
             for(int i = 0; i < neighborsSize; i++){
                 int neighborID = (int) VECTOR(neighbors)[i];
                 igraph_integer_t edgeID;
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
 
-                projectionMerge(projection[neighborID], projection[peerID]);
+                if (projectionMerge(projection[neighborID], projection[peerID])) {
+                    return mergeError(__FUNCTION__);
+                }
 
                 double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
                 dimestimate[peerID] = mean;
@@ -473,26 +535,9 @@ int main(int argc, char **argv) {
         // check local convergence
         if (params.roundsToExecute < 0) {
             for(int peerID = 0; peerID < params.peers; peerID++){
-
                 if(converged[peerID])
                     continue;
-
-                bool dimestimateconv;
-                if(prevestimate[peerID])
-                    dimestimateconv = fabs((prevestimate[peerID] - dimestimate[peerID]) / prevestimate[peerID]) < params.convThreshold;
-                else
-                    dimestimateconv = false;
-
-                if(dimestimateconv)
-                    convRounds[peerID]++;
-                else
-                    convRounds[peerID] = 0;
-
-
-                converged[peerID] = (convRounds[peerID] >= params.convLimit);
-                if(converged[peerID]){
-                    Numberofconverged --;
-                }
+                checkFirstConvegence(prevestimate[peerID], dimestimate[peerID], params.convThreshold, convRounds[peerID], converged[peerID], params.convLimit, Numberofconverged);
             }
         }
         rounds++;
@@ -513,12 +558,7 @@ int main(int argc, char **argv) {
     }
     /*** Each peer restore tiles cardinality***/
     for(int peerID = 0; peerID < params.peers; peerID++){
-        unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-        it = projection[peerID].begin();
-        while (it != projection[peerID].end()) {
-            it->second = round(it->second * dimestimate[peerID]);
-            it++;
-        }
+        restoreCardinality(projection[peerID], dimestimate[peerID]);
     }
 
     /*** Each peer remove tiles < threshold ***/
@@ -526,153 +566,100 @@ int main(int argc, char **argv) {
         projectionThreshold(projection[peerID], threshold);
     }
 
-
     if (params.typeAlgorithm == 0) {
-        /*** Simultaneous minimum and maximum algorithm***/
-        int *minX;
-        int *minY;
-        int *maxX;
-        int *maxY;
-        try {
-            minX = new int[params.peers];
-            minY = new int[params.peers];
-            maxX = new int[params.peers];
-            maxY = new int[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
+        minX = new (nothrow) int[params.peers];
+        if (!minX)
+            return memoryError(__FUNCTION__);
+        minY = new (nothrow) int[params.peers];
+        if (!minY)
+            return memoryError(__FUNCTION__);
+        maxX = new (nothrow) int[params.peers];
+        if (!maxX)
+            return memoryError(__FUNCTION__);
+        maxY = new (nothrow) int[params.peers];
+        if (!maxY)
+            return memoryError(__FUNCTION__);
 
+        /*** Simultaneous minimum and maximum algorithm***/
         for(int peerID = 0; peerID < params.peers; peerID++){
             simultaneousMaxMin(projection[peerID], &maxX[peerID], &minX[peerID], &maxY[peerID], &minY[peerID]);
         }
 
-        // remove
-        /*** per stampare il dataset (ordinato) ottenuto da ogni peer***/
-        /*for(int peerID = 0; peerID < params.peers; peerID++) {
-            printOrderedProjection(peerID, params.peers, projection[peerID]);
-        }*/
-
         /// (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
         /// (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
         /*** x1,x2,y1,y2 are matrices with dimension of n° peers x squares[peerID] (some peer can have an extra square from checkerboard partition) ***/
-        int** y1;
-        int** x1;
-        int** y2;
-        int** x2;
-        try {
-            y1 = new int*[params.peers];
-            x1 = new int*[params.peers];
-            y2 = new int*[params.peers];
-            x2 = new int*[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
+        y1 = new (nothrow) int*[params.peers];
+        if (!y1)
+            return memoryError(__FUNCTION__);
+        x1 = new (nothrow) int*[params.peers];
+        if (!x1)
+            return memoryError(__FUNCTION__);
+        y2 = new (nothrow) int*[params.peers];
+        if (!y2)
+            return memoryError(__FUNCTION__);
+        x2 = new (nothrow) int*[params.peers];
+        if (!x2)
+            return memoryError(__FUNCTION__);
 
         /// domain of dataset is divide in a grid p*q
-        int* q;
-        int* p;
-        try {
-            q = new int[params.peers];
-            p = new int[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
-        /// how much square for each peer ( if p*q % peers != 0 some peers will have one extra square)
-        int* squares;
-        try {
-            squares = new int[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
-        /**!< minimun squares for each peer from checkerboard partition*/
-        int min =1; // set as input parameter?
+        q = new (nothrow) int[params.peers];
+        if (!q)
+            return memoryError(__FUNCTION__);
+        p = new (nothrow) int[params.peers];
+        if (!p)
+            return memoryError(__FUNCTION__);
 
-        /// initial hypothesis, later each peer check if have an extra square
-        for (int i = 0; i < params.peers; i++) {
-            squares[i] = min;
-        }
+        /// how much square for each peer ( if p*q % peers != 0 some peers will have one extra square)
+
+        squares = new (nothrow) int[params.peers];
+        if (!squares)
+            return memoryError(__FUNCTION__);
 
         /*** Each peer obtain its "square(s)" coordinate(s)***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
-            int a, b, restA, restB;
             /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
-            getGridSize(&p[peerID], &q[peerID],(int) dimestimate[peerID], squares[peerID]);
+            getGridSize(p[peerID], q[peerID],(int) dimestimate[peerID], params.minSquares);
 
-            /// compute how much tiles for each square on y (a) and x (b) axis
-            a =     (maxY[peerID]-minY[peerID]) / q[peerID];
-            b =     (maxX[peerID]-minX[peerID]) / p[peerID];
-            restA = (maxY[peerID]-minY[peerID]) % q[peerID];
-            restB = (maxX[peerID]-minX[peerID]) % p[peerID];
-            //cout << "peer: " << peerID << endl;
+            /// peer gets its number of squares
+            getSquares(squares[peerID], peerID, p[peerID], q[peerID], dimestimate[peerID], params.minSquares);
 
-            /// i, j coordinate in grid p*q,
-            int *i, *j;
-            if (peerID < (p[peerID] * q[peerID]) % (int) dimestimate[peerID] ) {
-                squares[peerID]++; // extra square for some peers
-            }
-            try {
-                i = new int[squares[peerID]];
-                j = new int[squares[peerID]];
-            } catch (bad_alloc& ba) {
-                cerr << "bad_alloc caught: " << ba.what() << '\n';
-                exit(-1);
-            }
-
-            try {
-                y1[peerID] = new int[squares[peerID]];
-                x1[peerID] = new int[squares[peerID]];
-                y2[peerID] = new int[squares[peerID]];
-                x2[peerID] = new int[squares[peerID]];
-            } catch (bad_alloc& ba) {
-                cerr << "bad_alloc caught: " << ba.what() << '\n';
-                exit(-1);
-            }
-
-
+            y1[peerID] = new (nothrow) int[squares[peerID]];
+            if (!y1[peerID])
+                return memoryError(__FUNCTION__);
+            x1[peerID] = new (nothrow) int[squares[peerID]];
+            if (!x1[peerID])
+                return memoryError(__FUNCTION__);
+            y2[peerID] = new (nothrow) int[squares[peerID]];
+            if (!y2[peerID])
+                return memoryError(__FUNCTION__);
+            x2[peerID] = new (nothrow) int[squares[peerID]];
+            if (!x2[peerID])
+                return memoryError(__FUNCTION__);
 
             for (int k = 0; k < squares[peerID]; k++) {
-                i[k] = (peerID + k*(int)dimestimate[peerID]) /p[peerID] + 1;
-                j[k] = (peerID + k*(int)dimestimate[peerID]) %p[peerID] + 1;
-
-                y1[peerID][k] = i[k] <= restA ? i[k]*(a+1) + minY[peerID] : restA*(a+1) + (i[k]-restA)*a + minY[peerID];
-                x1[peerID][k] = j[k] <= restB ? j[k]*(b+1) + minX[peerID] : restB*(b+1) + (j[k]-restB)*b + minX[peerID];
-                y2[peerID][k] = (i[k] <= restA && restA != 0) ? y1[peerID][k] - (a+1) : y1[peerID][k] - (a);
-                x2[peerID][k] = (j[k] <= restB  && restB != 0) ? x1[peerID][k] - (b+1) : x1[peerID][k] - (b);
-                /// include the left and bottom edge of grid
-                if (y2[peerID][k] == minY[peerID])
-                    y2[peerID][k] -= 1;
-
-                if (x2[peerID][k] == minX[peerID])
-                    x2[peerID][k] -= 1;
-                //cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
+                /// Compute coordinate for k-th square
+                getSquaresCoordinate(x1[peerID][k],y1[peerID][k], y2[peerID][k], x2[peerID][k], p[peerID], q[peerID],
+                        dimestimate[peerID], minX[peerID], minY[peerID], maxX[peerID], maxY[peerID], k, peerID);
             }
-            delete[] i;
-            delete[] j;
+
         }
+        delete[] p, p = nullptr;
+        delete[] q, q = nullptr;
 
-        delete[] p;
-        delete[] q;
-
-        delete[] minX;
-        delete[] minY;
-        delete[] maxX;
-        delete[] maxY;
+        delete[] minX, minX = nullptr;
+        delete[] minY, minY = nullptr;
+        delete[] maxX, maxX = nullptr;
+        delete[] maxY, maxY = nullptr;
 
         /*** Each peer find the tiles in own square(s)***/
-        unordered_map<array<int, 2>, double, container_hasher> *squareProjection;
-        try {
-            squareProjection = new unordered_map<array<int, 2>, double, container_hasher>[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
+
+        squareProjection = new (nothrow) hashmap[params.peers];
+        if (!squareProjection)
+            return memoryError(__FUNCTION__);
+
         for(int peerID = 0; peerID < params.peers; peerID++) {
             int skip;
-            unordered_map<array<int, 2>, double, container_hasher>::iterator it;
+            hashmap::iterator it;
             it = projection[peerID].begin();
             while (it != projection[peerID].end()) {
                 skip = 0;
@@ -713,7 +700,7 @@ int main(int argc, char **argv) {
 
 
         /***Each peer clustering its own tiles and compute centroids of clusters***/
-        vector<unordered_set<array<int, 3>, container_hasher>> *clusters;
+        vectorSet3 *clusters;
         try {
             clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
         } catch (bad_alloc& ba) {
@@ -791,14 +778,9 @@ int main(int argc, char **argv) {
                 igraph_vector_t neighbors;
                 igraph_vector_init(&neighbors, 0);
                 igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
-                long neighborsSize = igraph_vector_size(&neighbors);
-                if(fanOut < neighborsSize && fanOut != -1){
-                    // randomly sample f adjacent vertices
-                    igraph_vector_shuffle(&neighbors);
-                    igraph_vector_remove_section(&neighbors, params.fanOut, neighborsSize);
-                }
 
-                neighborsSize = igraph_vector_size(&neighbors);
+                long neighborsSize = getNeighborsSize(graph, neighbors, peerID, fanOut);
+
                 for(int i = 0; i < neighborsSize; i++){
                     int neighborID = (int) VECTOR(neighbors)[i];
                     igraph_integer_t edgeID;
@@ -922,7 +904,7 @@ int manhattanDistance(int x1, int x2, int y1, int y2) {
 int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
     if (clusters.size() <= 0) {
         cerr << "Bad clusters data structure" << endl;
-        return -1;
+        return dataError(__FUNCTION__);
     }
     centroids.clear();
     unSet3::iterator it_tiles;
@@ -935,7 +917,7 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
         if (!clusters.at(j).size()) {
             cerr << "Bad cluster structure" << endl;
             centroids.clear();
-            return -2;
+            return dataError(__FUNCTION__);
         }
         it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
         /************ for each tile in cluster j-th ************/
@@ -975,7 +957,7 @@ void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, 
 int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int *minY) {
     if (projection.size() <= 0) {
         cerr << "Bad projection data structure" << endl;
-        return -1;
+        return dataError(__FUNCTION__);
     }
     int x1, x2, y1, y2;
 
@@ -1049,13 +1031,13 @@ int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int
     return 0;
 }
 
-int getGridSize(int *p, int *q, int peers, int min) {
-    *q = sqrt(peers*min);
-    if ((*q * *q) != peers*min) { // check if peers*min is a perfect square
-        *p = *q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
-        *q = *q * (*q + 1) < peers ? ++*q : *q;
+int getGridSize(int &p, int &q, int peers, int min) {
+    q = sqrt(peers*min);
+    if ((q * q) != peers*min) { // check if peers*min is a perfect square
+        p = q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
+        q = q * (q + 1) < peers ? ++q : q;
     } else {
-        *p = *q;
+        p = q;
     }
 
     return 0;
@@ -1075,12 +1057,12 @@ int getGridSize(int *p, int *q, int peers, int min) {
 int projectionMerge(hashmap &projectionN, hashmap &projectionP){
     if (projectionN.size() <= 0) {
         cerr << "Bad projection data structure" << endl;
-        return -2;
+        return dataError(__FUNCTION__);
     }
 
     if (projectionP.size() <= 0) {
         cerr << "Bad projection data structure" << endl;
-        return -2;
+        return dataError(__FUNCTION__);
     }
     hashmap::iterator itN;
     hashmap::iterator itP;
@@ -1093,8 +1075,7 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
         } else {
             auto check = projectionP.insert( {itN -> first, itN -> second});
             if (!(check.second)) {
-                cerr << "Insert Error" << endl;
-                return -1;
+                return insertError(__FUNCTION__);
             }
         }
         itN++;
@@ -1123,12 +1104,12 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
  */
 int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
     if (clusterN.size() <= 0) {
-        cerr << "Bad cluster data structure" << endl;
-        return -1;
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
     }
     if (clusterP.size() <= 0) {
-        cerr << "Bad cluster data structure" << endl;
-        return -1;
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
     }
     unSet3::iterator itN = clusterN.begin();
     unSet3::iterator itP = clusterP.begin();
@@ -1146,8 +1127,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
 
         auto check = tmp.insert({tile, cardinality});
         if (!(check.second)) {
-            cerr << "Insert Error" << endl;
-            return -2;
+            return insertError(__FUNCTION__);
         }
         itN++;
     }
@@ -1159,16 +1139,14 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
         itTmp = tmp.find(tile);
         if (itTmp != tmp.end()) {
             if (!average(&itTmp -> second, cardinality)) {
-                cerr << "Average Error" << endl;
-                return -3;
+                return arithmeticError(__FUNCTION__);
             }
         }
 
         else {
             auto check = tmp.insert( {tile, cardinality});
             if (!(check.second)) {
-                cerr << "Insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
         }
         itP++;
@@ -1178,8 +1156,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
     for (int m = 0; m < tmp.size(); m++) {
         auto check = s.insert({ (itTmp ->first)[0], (itTmp ->first)[1], (int) itTmp -> second});
         if (!(check.second)) {
-            cerr << "Insert Error" << endl;
-            return -2;
+            return insertError(__FUNCTION__);
         }
         itTmp++;
     }
@@ -1204,14 +1181,13 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
     int *notCopyN = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterN is also present in clusterP */
 
     notCopyP = new (nothrow) int[centroidsP.size()]();
-    if(!notCopyP){
-        cout << "Not enough memory\n";
-        return -1;
-    }
+    if(!notCopyP)
+        return memoryError(__FUNCTION__);
+
 
     notCopyN = new (nothrow) int[centroidsN.size()]();
     if(!notCopyN){
-        cout << "Not enough memory\n";
+        returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
     }
 
@@ -1222,7 +1198,7 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
                 if ( !(clustersP.at(l) == clustersN.at(k))) {
                     if (!clusterUnion(clustersN.at(k), clustersP.at(l))) {
                         cerr << "Cluster Union error" << endl;
-                        returnValue = -2;
+                        returnValue = -25;
                         goto ON_EXIT;
                     }
 
@@ -1261,7 +1237,7 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
 int average(double *x, double y)  {
     if (x == nullptr) {
         cerr << "x cannot be null!" << endl;
-        return -1;
+        return arithmeticError(__FUNCTION__);
     } else {
         *x = (*x+y)/2.0;
     }
@@ -1272,29 +1248,44 @@ int average(double *x, double y)  {
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni) {
     int row, column;
     if(getDim(name_file, row, column)) {
-        return -2;
+        return fileError(__FUNCTION__);
     }
     ni = row;
 
     *dataset_storage = new (nothrow) double[row*column];
     if (!(*dataset_storage)){
-        cout << "Not enough memory" << endl;;
-        return -1;
+        return memoryError(__FUNCTION__);
     }
+
 
     (*dataset) = new (nothrow) double*[row];
     if (!(*dataset)){
-        cout << "Not enough memory" << endl;;
-        return -1; //goto on exit
+        delete[] *dataset_storage, *dataset_storage = nullptr;
+        return memoryError(__FUNCTION__);
     }
 
     for (int i = 0; i < row; i++) {
         (*dataset)[i] = &(*dataset_storage)[i*column];
+        if (!(*dataset)[i]) {
+            cerr << "Not enough memory allocating the " << i << "-th tile_points array" << endl;
+            for (int x = 0; x < i; x++) {
+                delete[] (*dataset)[x], (*dataset)[x] = nullptr;
+            }
+            delete[] *dataset, *dataset = nullptr;
+            return memoryError(__FUNCTION__);
+        }
     }
 
     if(loadData(*dataset, name_file, column)) {
-        return -2; // goto on exit
+        delete[] *dataset_storage, *dataset_storage = nullptr;
+        for (int i = 0; i < row; i++) {
+            delete[] (*dataset)[i], (*dataset)[i] = nullptr;
+        }
+        delete[] *dataset, *dataset = nullptr;
+
+        return fileError(__FUNCTION__);
     }
+
 
     return 0;
 }
@@ -1330,6 +1321,7 @@ int checkPartitioning(long *peerLastItem, int peers, int ni) {
     }
     return 0;
 }
+
 void StartTheClock(){
     t1 = high_resolution_clock::now();
 }
@@ -1532,6 +1524,121 @@ void parametersSummary(Params params) {
     cout << "number of consecutive rounds in which a peer must locally converge = "<< params.convLimit << "\n";
     cout << "\n\n";
 
+}
+
+int generateGraph(igraph_t &graph, int peers, int graphType) {
+    // turn on attribute handling in igraph
+    igraph_i_set_attribute_table(&igraph_cattribute_table);
+
+    // seed igraph PRNG
+    igraph_rng_seed(igraph_rng_default(), 42);
+
+    // generate a connected random graph
+    graph = generateRandomGraph(graphType, peers);
+    return 0;
+}
+
+int graphProperties(igraph_t &graph) {
+    igraph_vector_t result;
+    igraph_real_t mindeg;
+    igraph_real_t maxdeg;
+
+    igraph_vector_init(&result, 0);
+    igraph_degree(&graph, &result, igraph_vss_all(), IGRAPH_ALL, IGRAPH_NO_LOOPS);
+    igraph_vector_minmax(&result, &mindeg, &maxdeg);
+
+    cout << "Minimum degree is "  <<  mindeg << ", Maximum degree is " << maxdeg << "\n";
+
+    return 0;
+}
+
+int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int peerID, int fanOut) {
+    long neighborsSize = igraph_vector_size(&neighbors);
+    if(fanOut < neighborsSize && fanOut != -1){
+        // randomly sample f adjacent vertices
+        igraph_vector_shuffle(&neighbors);
+        igraph_vector_remove_section(&neighbors, fanOut, neighborsSize);
+    }
+
+    neighborsSize = igraph_vector_size(&neighbors);
+    return neighborsSize;
+}
+
+int checkFirstConvegence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged) {
+    bool dimestimateconv;
+    if(prevestimate)
+        dimestimateconv = fabs((prevestimate - dimestimate) / prevestimate) < convThreshold;
+    else
+        dimestimateconv = false;
+
+    if(dimestimateconv)
+        convRounds++;
+    else
+        convRounds = 0;
+
+    converged = (convRounds >= convLimit);
+    if(converged){
+        Numberofconverged --;
+    }
+}
+
+int restoreCardinality(hashmap &projection, int dimestimate) {
+    hashmap::iterator it;
+    it = projection.begin();
+    while (it != projection.end()) {
+        it->second = round(it->second * dimestimate);
+        it++;
+    }
+}
+
+int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY,
+                    int q, int p, int minX, int minY, int maxX, int maxY ) {
+    if (!p)
+        return arithmeticError(__FUNCTION__);
+
+    if (!q)
+        return arithmeticError(__FUNCTION__);
+
+    nTilesY = (maxY - minY) / q;
+    nTilesX = (maxX - minX) / p;
+    restTilesY = (maxY - minY) % q;
+    restTilesX = (maxX - minX) % p;
+
+    return 0;
+
+}
+int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minSquares) {
+    if (peerID < (p * q) % (int) dimestimate ) {
+        squares = minSquares+1; // extra square for some peers
+    } else
+        squares = minSquares;
+
+    return 0;
+}
+
+int getSquaresCoordinate(int &x1, int &y1, int &y2, int &x2, int p, int q, int dimestimate,
+                         int minX, int minY, int maxX, int maxY, int k, int peerID) {
+    int i, j;
+    int nTilesY, nTilesX, restTilesY, restTilesX;
+    /// compute how group tiles for each square on y and x axis
+    getGroupsTiles(nTilesX, nTilesY, restTilesX, restTilesY,
+                   q, p, minX, minY, maxX, maxY);
+    i = (peerID + k*(int)dimestimate) /p + 1;
+    j = (peerID + k*(int)dimestimate) %p + 1;
+
+    y1 = i <= restTilesY ? i * (nTilesY + 1) + minY : restTilesY * (nTilesY + 1) + (i - restTilesY) * nTilesY + minY;
+    x1 = j <= restTilesX ? j * (nTilesX + 1) + minX : restTilesX * (nTilesX + 1) + (j - restTilesX) * nTilesX + minX;
+    y2 = (i <= restTilesY && restTilesY != 0) ? y1 - (nTilesY + 1) : y1 - (nTilesY);
+    x2 = (j <= restTilesX && restTilesX != 0) ? x1 - (nTilesX + 1) : x1 - (nTilesX);
+    /// include the left and bottom edge of grid
+    if (y2 == minY)
+        y2 -= 1;
+
+    if (x2 == minX)
+        x2 -= 1;
+    //cout << "x1: " << y1[peerID][k]<< " x2: " << x1[peerID][k] << endl;
+
+    return 0;
 }
 
 

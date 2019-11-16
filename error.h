@@ -17,5 +17,7 @@ int partitionError(string nameFunction);
 int insertError(string nameFunction);
 int findError(string nameFunction);
 int dataError(string nameFunction);
+int arithmeticError(string nameFunction);
+int mergeError(string nameFunction);
 
 #endif //P2PRASTER_ERROR_H

@@ -61,7 +61,7 @@ typedef unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_
  * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
  * @param [in] clusters - Data structure which contains clusters to print
  * @param [in] peerID - Peer id that want to write on file
- * @return 0 in case of success, -1 in case of open file error, -2 in case of bad clusters structure, -3 in case of bad cluster
+ * @return 0 in case of success, -7 in case of open file error, -3 in case of bad data structures
  */
 template <typename T>
 int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID);
@@ -75,7 +75,7 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
  * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
  * @param clusters - Data structure which contains clusters to print
  * @param all_points - Data structure which contains the mapping tiles-points
- * @return 0 in case of success, -1 in case of open file error, -2 in case of bad clusters structure, -3 in case of bad all_points structure, -4 in case of bad cluster
+ * @return 0 in case of success, -7 in case of open file error, -3 in case of bad structure
  */
 template <typename T>
 int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
@@ -109,7 +109,7 @@ int loadData(double **m, string name_file, int column);
  * @param [in] coordinate - Coordinate of tile of which we want to obtain its neighbors
  * @param [in,out] projection - Data structure contains all tiles where search the tile's neighbors
  * @param [in,out] result - Contains all tile's neighbors found into projection
- * @return 0 in case of success
+ * @return 0 if success, -2 in case of insert error
  */
 int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result);
 
@@ -121,7 +121,7 @@ int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result);
  * @param [in,out] squareProjection - Data structure contains all peer's tiles where search the tile's neighbors
  * @param [in,out] projection - Data structure contains all remaining tiles where search the tile's neighbors
  * @param [in,out] result - Contains all tile's neighbors found into projection or squareProjection
- * @return 0 in case of success
+ * @return 0 if success, -2 in case of insert error
  */
 
 int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &projection, unSet3 &result);
@@ -153,7 +153,7 @@ int mapToTiles(double **m, double precision, hashmap &projection, int start, int
  * @param [in] n - Number of points in Dataset
  * @param [in,out] projection - Data structure where save the projection result of raster algorithm
  * @param [in,out] all_points - Data structure where save the mapping tiles-points
- * @return 0 in case of success, -1 in case of find error, -2 in case of insert error
+ * @return 0 in case of success, -10 in case of find error, -2 in case of insert error
  */
 int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap &projection, hashmapUnset &all_points);
 
@@ -178,7 +178,7 @@ int projectionThreshold(hashmap &projection, int threshold);
  * @param [in,out] projection - Data structure with tiles
  * @param [in] min_size - Parameter for raster algorithm (it is the minimum number of tiles in order to form a cluster)
  * @param [in,out] clusters - Data structure where save the clusters found
- * @return 0 in case of success, -1 in case of bad projection structure, -2 in case of insert error
+ * @return 0 in case of success, -3 in case of bad projection structure, -2 in case of insert error
  */
 int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters);
 
@@ -192,7 +192,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters);
  * @param [in,out] projection - Data structure with remaining tiles
  * @param [in] min_size - Parameter for raster algorithm (it is the minimum number of tiles in order to form a cluster)
  * @param [in,out] clusters - Data structure where save the clusters found
- * @return 0 in case of success, -1 in case of bad projection structure, -2 in case of insert error
+ * @return 0 in case of success, -3 in case of bad projection structure, -2 in case of insert error
  */
 int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters);
 

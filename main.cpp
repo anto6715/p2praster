@@ -5,6 +5,7 @@
 #include <cstring>
 #include <random>
 #include "raster.h"
+#include "error.h"
 
 /**
  * This function compute the Manhattan distance between two points p1,p2
@@ -107,6 +108,23 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP);
  */
 int average(double *x, double y);
 
+
+/**
+ *
+ * @param [in] dataset_storage - Array where store all dataset
+ * @param [in] dataset - Array of pointer that pints at dataset_storage
+ * @param [in] name_file - Name input file
+ * @param [in,out] ni - Nu,ber of points
+ * @return 0 if success, -1 in case of memory error, -2 in case of input file error
+ */
+int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni);
+
+int partitionDataset(long *peerLastItem, int peers, int ni);
+
+int checkPartitioning(long *peerLastItem, int peers, int ni);
+
+
+
 /**
  * When called save the actual time into global variable t1
  */
@@ -136,7 +154,7 @@ using namespace std::chrono;
 
 /*!< @struct Params - A structure containing parameters read from command-line.  */
 struct Params {
-    long        ni;                /*!< The number of point of dataset */
+    int        ni;                /*!< The number of point of dataset */
     int         peers;             /*!< The number of peers */
     string      outputFilename;    /*!< The path for the output file */
     double      convThreshold;     /*!< The local convergence tolerance for the consensus algorithm */
@@ -153,12 +171,18 @@ struct Params {
     int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
 };
 
-high_resolution_clock::time_point t1, t2;
+void parametersSummary(Params params);
 
+high_resolution_clock::time_point t1, t2;
+/**
+ *
+ * @param argc
+ * @param argv
+ * @return 0 if success, -1 in case of memory error, -8 in case of dataset error
+ */
 int main(int argc, char **argv) {
     /*** Default Parameters***/
-    long        ni; // points number
-    long        *peerLastItem; // index of a peer last item
+    int        ni; // points number
     int         peers = 10; // number of peers
     int         fanOut = 3; //fan-out of peers
     int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
@@ -177,6 +201,11 @@ int main(int argc, char **argv) {
     string          outputFilename;
     igraph_t        graph;
     Params          params;
+
+    /*** Array declarations ***/
+    long *peerLastItem = nullptr; // index of a peer last item
+    double *dataset_storage = nullptr;
+    double **dataset = nullptr;
 
 
     /*** parse command-line parameters ***/
@@ -265,64 +294,27 @@ int main(int argc, char **argv) {
     }
 
     /*** read dataset dimensions ***/
-    int row, column;
-    if(getDim(name_file, row, column)) {
-        exit(-1);
-    }
-    ni = row;
-
-    double *dataset_storage;
-    double **dataset;
-    try {
-        dataset_storage = new double[row*column];
-        dataset = new double*[row];
-
-    } catch (bad_alloc& ba) {
-        cerr << "bad_alloc caught: " << ba.what() << '\n';
-        exit(-1);
-    }
-    for (int i = 0; i < row; i++) {
-        dataset[i] = &dataset_storage[i*column];
-    }
-
     StartTheClock();
-    if(loadData(dataset, name_file, column)) {
-        exit(-1);
-    }
+    if (readDataset(&dataset_storage, &dataset, name_file, ni)) {
+        return readDatasetError(__FUNCTION__);
 
+    }
     double greaddatasettime = StopTheClock();
     if (!outputOnFile) {
         cout <<"Time (seconds) required to load the dataset: " << greaddatasettime << "\n";
     }
 
-
     /** Compute last item for each peer */
-    peerLastItem = new long[peers]();
-    std::random_device rd; /** obtain a random number from hardware */
-    std::mt19937 eng(rd()); /** seed the generator */
-    std::uniform_real_distribution<> distr(-1, 1); /** define the range */
-
-    for(int i = 0; i < peers - 1; i++){
-        float rnd = distr(eng);
-        //cerr << "rnd: " << rnd << "\n";
-        long last_item = rnd * ((float)ni/(float)peers) * 0.1 + (float) (i+1) * ((float)ni/(float)peers) - 1;
-        peerLastItem[i] = last_item;
-    }
-
-    peerLastItem[peers - 1] = ni-1;
+    peerLastItem = new (nothrow) long[peers]();
+    if (!peerLastItem)
+        return memoryError(__FUNCTION__);
+    if (partitionDataset(peerLastItem, peers, ni))
+        return partitionError(__FUNCTION__);
 
     /** check the partitioning correctness */
-    long sum = peerLastItem[0] + 1;
-    //cerr << "peer 0:" << sum << "\n";
-    for(int i = 1; i < peers; i++) {
-        sum += peerLastItem[i] - peerLastItem[i-1];
-        //cerr << "peer " << i << ":" << peerLastItem[i] - peerLastItem[i-1] << "\n";
-    }
+    if (checkPartitioning(peerLastItem, peers, ni))
+        return partitionError(__FUNCTION__);
 
-    if(sum != ni) {
-        cerr << "ERROR: ni = "<< ni << "!= sum = " << sum << endl;
-        exit(EXIT_FAILURE);
-    }
 
     /** assign parameters read from command line */
     params.name_file = name_file;
@@ -344,20 +336,7 @@ int main(int argc, char **argv) {
     outputOnFile = !params.outputFilename.empty();
 
     if (!outputOnFile) {
-        cout << "\n\nPARAMETERS:\n";
-        cout << "dataset = " << params.name_file << "\n";
-        cout << "n° points = " << params.ni << "\n";
-        cout << "precision = " << params.precision << "\n";
-        cout << "threshold = " << params.threshold << "\n";
-        cout << "min size = " << params.min_size << "\n";
-        cout << "radius = " << params.radius << "\n";
-        cout << "peers = " << params.peers << "\n";
-        cout << "fan-out = " << params.fanOut << "\n";
-        cout << "graph type = ";
-        printGraphType(params.graphType);
-        cout << "local convergence tolerance = "<< params.convThreshold << "\n";
-        cout << "number of consecutive rounds in which a peer must locally converge = "<< params.convLimit << "\n";
-        cout << "\n\n";
+        parametersSummary(params);
     }
 
     /** Graph generation */
@@ -879,7 +858,7 @@ int main(int argc, char **argv) {
 
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
-        mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
+        mapToTilesPrime(dataset, precision, threshold, ni, proj, all_points);
         printAllPointsClustered(clusters[0], all_points);
 
         delete[] prevclustersestimate;
@@ -917,9 +896,11 @@ int main(int argc, char **argv) {
 
         unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
         unordered_map<array<int, 2>, double, container_hasher> proj;
-        mapToTilesPrime(dataset, precision, threshold, row, proj, all_points);
+        mapToTilesPrime(dataset, precision, threshold, ni, proj, all_points);
         printAllPointsClustered(clusters[0], all_points);
     }
+
+
 
 
     delete[] dimestimate;
@@ -930,6 +911,7 @@ int main(int argc, char **argv) {
     delete[] prevestimate;
     delete[] convRounds;
 
+    return 0;
 
 }
 
@@ -1078,6 +1060,8 @@ int getGridSize(int *p, int *q, int peers, int min) {
 
     return 0;
 }
+
+
 /**
  * The first while iterates on all neighbor tiles, if a tile is yet present
  * into peer tiles, add the two cardinality, if not insert the tile into
@@ -1125,6 +1109,8 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
 
     return 0;
 }
+
+
 /**
  * This function use an hashmap to merge in linear time 2 clusters with dimension m and n.
  * A naive method check all m tiles of first cluster with all n tiles of second clusters
@@ -1202,6 +1188,8 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
 
     return 0;
 }
+
+
 /**
  * The double for cycle find all common cluster and set to 1 the correspondent index
  * into notCopy structure. For example if the k-th cluster of clusterN is equal at the
@@ -1281,6 +1269,67 @@ int average(double *x, double y)  {
     return 0;
 }
 
+int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni) {
+    int row, column;
+    if(getDim(name_file, row, column)) {
+        return -2;
+    }
+    ni = row;
+
+    *dataset_storage = new (nothrow) double[row*column];
+    if (!(*dataset_storage)){
+        cout << "Not enough memory" << endl;;
+        return -1;
+    }
+
+    (*dataset) = new (nothrow) double*[row];
+    if (!(*dataset)){
+        cout << "Not enough memory" << endl;;
+        return -1; //goto on exit
+    }
+
+    for (int i = 0; i < row; i++) {
+        (*dataset)[i] = &(*dataset_storage)[i*column];
+    }
+
+    if(loadData(*dataset, name_file, column)) {
+        return -2; // goto on exit
+    }
+
+    return 0;
+}
+
+
+int partitionDataset(long *peerLastItem, int peers, int ni) {
+    std::random_device rd; /** obtain a random number from hardware */
+    std::mt19937 eng(rd()); /** seed the generator */
+    std::uniform_real_distribution<> distr(-1, 1); /** define the range */
+
+    for(int i = 0; i < peers - 1; i++){
+        float rnd = distr(eng);
+        //cerr << "rnd: " << rnd << "\n";
+        long last_item = rnd * ((float)ni/(float)peers) * 0.1 + (float) (i+1) * ((float)ni/(float)peers) - 1;
+        peerLastItem[i] = last_item;
+    }
+
+    peerLastItem[peers - 1] = ni-1;
+    return 0;
+}
+
+int checkPartitioning(long *peerLastItem, int peers, int ni) {
+    long sum = peerLastItem[0] + 1;
+    //cerr << "peer 0:" << sum << "\n";
+    for(int i = 1; i < peers; i++) {
+        sum += peerLastItem[i] - peerLastItem[i-1];
+        //cerr << "peer " << i << ":" << peerLastItem[i] - peerLastItem[i-1] << "\n";
+    }
+
+    if(sum != ni) {
+        cerr << "ERROR: ni = "<< ni << "!= sum = " << sum << endl;
+        return partitionError(__FUNCTION__);
+    }
+    return 0;
+}
 void StartTheClock(){
     t1 = high_resolution_clock::now();
 }
@@ -1466,3 +1515,23 @@ void printGraphType(int type)
     }
 
 }
+
+void parametersSummary(Params params) {
+    cout << "\n\nPARAMETERS:\n";
+    cout << "dataset = " << params.name_file << "\n";
+    cout << "n° points = " << params.ni << "\n";
+    cout << "precision = " << params.precision << "\n";
+    cout << "threshold = " << params.threshold << "\n";
+    cout << "min size = " << params.min_size << "\n";
+    cout << "radius = " << params.radius << "\n";
+    cout << "peers = " << params.peers << "\n";
+    cout << "fan-out = " << params.fanOut << "\n";
+    cout << "graph type = ";
+    printGraphType(params.graphType);
+    cout << "local convergence tolerance = "<< params.convThreshold << "\n";
+    cout << "number of consecutive rounds in which a peer must locally converge = "<< params.convLimit << "\n";
+    cout << "\n\n";
+
+}
+
+

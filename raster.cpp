@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "raster.h"
+#include "error.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -34,9 +35,7 @@ int getDim(string name_file, int &row, int &column) {
         row++;
     }
     if (!inputFile.eof()) {
-        cerr << "Could not read file " << name_file << "\n";
-        //__throw_invalid_argument("File not found.");
-        return -1;
+        return fileError(__FUNCTION__);
     }
     return 0;
 }
@@ -68,10 +67,11 @@ int loadData(double **m, string name_file, int column) {
         row++;
     }
     if (!inputFile.eof()) {
-        cerr << "Could not read file " << name_file << "\n";
-        //__throw_invalid_argument("File not found.");
-        return -1;
+        string a = __FUNCTION__;
+        return fileError(__FUNCTION__);
     }
+
+    inputFile.close();
     return 0;
 }
 
@@ -99,7 +99,10 @@ int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) 
         it = projection.find(*it_neighbor);
         it_neighbor++;
         if (it != projection.end()) {
-            result.insert(it -> first);
+            auto check = result.insert(it -> first);
+            if (!check.second) {
+                return insertError(__FUNCTION__);
+            }
             projection.erase(it++);
         }
     }
@@ -129,12 +132,18 @@ int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &p
     for (int i = 0; i < neighbors.size(); i++) {
         it = squareProjection.find(*it_neighbor);
         if (it != squareProjection.end()) {
-            result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+            auto check = result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+            if (!check.second) {
+                return insertError(__FUNCTION__);
+            }
             squareProjection.erase(it++);
         } else {
             it = projection.find(*it_neighbor);
             if (it != projection.end()) {
-                result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+                auto check = result.insert({(it->first)[0], (it->first)[1],(int) it->second});
+                if (!check.second) {
+                    return insertError(__FUNCTION__);
+                }
                 projection.erase(it++);
             }
         }
@@ -160,8 +169,7 @@ int mapToTiles(double **m, double precision, hashmap &projection, int start, int
         } else {
             auto a = projection.insert({tile, 1.0});
             if (!(a.second)) {
-                cerr << "Insert Error" << endl;
-                return -1;
+                return insertError(__FUNCTION__);
             }
         }
     }
@@ -187,34 +195,29 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
             /// if the tile is present into projection then it must be present into all_points
             it_map_all_points = all_points.find(tile);
             if (it_map_all_points == all_points.end()) {
-                cerr << "Find error" << endl;
-                return -1;
+                return findError(__FUNCTION__);
             }
 
             /// update mapping tile-points adding the new point
             auto a = (it_map_all_points -> second).insert({m[i][0],m[i][1]});
             if (!(a.second)) {
-                cerr << "Map insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
         } else {
             auto a = projection.insert({tile, 1.0});
             if (!(a.second)) {
-                cerr << "Map insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
 
             /// create mapping tile-point
             unordered_set<array<double , 2>, container_hasher> point;
             auto b = point.insert({m[i][0], m[i][1]});
             if (!(b.second)) {
-                cerr << "Set insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
             auto c = all_points.insert({tile, point});
             if (!(c.second)) {
-                cerr << "Map insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
         }
 
@@ -242,7 +245,7 @@ int projectionThreshold(hashmap &projection, int threshold) {
 int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
     if (projection.size() <= 0) {
         cerr << "Bad projection data structure" << endl;
-        return -1;
+        return dataError(__FUNCTION__);
     }
     hashmap::iterator iterator;
 
@@ -256,8 +259,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
         unSet2 visited;
         auto a = visited.insert(x);
         if (!(a.second)) {
-            cerr << "Set insert Error" << endl;
-            return -2;
+            return insertError(__FUNCTION__);
         }
 
         /// get neighbors of tile in exam
@@ -271,8 +273,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
             to_check.erase((to_check.begin()));
             auto b = visited.insert(value);
             if (!(b.second)) {
-                cerr << "Set insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
 
             unSet2 temp;
@@ -280,8 +281,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
             while (!temp.empty()) {
                 auto c = to_check.insert(*temp.begin());
                 if (!(c.second)) {
-                    cerr << "Set insert Error" << endl;
-                    return -2;
+                    return insertError(__FUNCTION__);
                 }
                 temp.erase((temp.begin()));
             }
@@ -298,7 +298,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
 int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters) {
     if (squareProjection.size() <= 0) {
         cerr << "Bad projection data structure" << endl;
-        return -1;
+        return dataError(__FUNCTION__);
     }
     hashmap::iterator iterator;
 
@@ -313,8 +313,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
         unSet3 visited;
         auto a = visited.insert(x);
         if (!(a.second)) {
-            cerr << "Set insert Error" << endl;
-            return -2;
+            return insertError(__FUNCTION__);
         }
 
         /// get neighbors of tile in exam
@@ -327,8 +326,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
             to_check.erase((to_check.begin()));
             auto b = visited.insert(value);
             if (!(b.second)) {
-                cerr << "Set insert Error" << endl;
-                return -2;
+                return insertError(__FUNCTION__);
             }
 
             unSet3 temp;
@@ -336,8 +334,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
             while (!temp.empty()) {
                 auto c = to_check.insert(*temp.begin());
                 if (!(c.second)) {
-                    cerr << "Set insert Error" << endl;
-                    return -2;
+                    return insertError(__FUNCTION__);
                 }
                 temp.erase((temp.begin()));
             }
@@ -346,7 +343,6 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
         if (visited.size() >= min_size) {
             clusters.push_back(visited);
         }
-
     }
 
     return 0;
@@ -357,18 +353,17 @@ template <typename T>
 int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
     if (clusters.size() <= 0) {
         cerr << "Bad clusters data structure" << endl;
-        return -2;
+        return dataError(__FUNCTION__);
     }
 
     if (all_points.size() <= 0) {
         cerr << "Bad all_points data structure" << endl;
-        return -3;
+        return dataError(__FUNCTION__);
     }
 
     ofstream outfile("clustered.csv");
     if (!outfile.is_open()) {
-        cerr << "Can't open/create file: " << "clustered.csv" << endl;
-        return -1;
+        return fileError(__FUNCTION__);
     }
 
     int count_not_clustered = 0;
@@ -386,7 +381,7 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
             cerr << "Bad cluster structure" << endl;
             outfile.clear();
             outfile.close();
-            return -4;
+            return dataError(__FUNCTION__);
         }
         it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
         /************ for each tile in cluster j-th ************/
@@ -397,7 +392,7 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
                     cerr << "Bad all_points structure" << endl;
                     outfile.clear();
                     outfile.close();
-                    return -3;
+                    return dataError(__FUNCTION__);
 
                 }
                 it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
@@ -425,7 +420,7 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
                     cerr << "Bad all_points structure" << endl;
                     outfile.clear();
                     outfile.close();
-                    return -3;
+                    return dataError(__FUNCTION__);
                 }
                 it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
                 /************ for each point in the tiles that are not in the clusters ************/
@@ -464,14 +459,13 @@ template <typename T>
 int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID) {
     if (clusters.size() <= 0) {
         cerr << "Bad clusters data structure" << endl;
-        return -2;
+        return dataError(__FUNCTION__);
     }
 
     ofstream outfile(to_string(peerID) +".csv");
-    if (!outfile.is_open()) {
-        cerr << "Can't open/create file: " << to_string(peerID) +".csv" << endl;
-        return -1;
-    }
+    if (!outfile.is_open())
+        return fileError(__FUNCTION__);
+
     cout <<  "n° cluster: " << clusters.size() << endl;
     typename unordered_set<T, container_hasher>::iterator it;
 
@@ -482,7 +476,7 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
             cerr << "Bad cluster structure" << endl;
             outfile.clear();
             outfile.close();
-            return -3;
+            return dataError(__FUNCTION__);
         }
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
@@ -522,22 +516,20 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     double** tile_points = nullptr;
 
     shannon = new (nothrow) double[clusters.size()];
-    if(!shannon){
-        cout << "Not enough memory" << endl;;
-        return -1;
-    }
+    if(!shannon)
+        return memoryError(__FUNCTION__);
 
 
     density = new (nothrow) double[clusters.size()];
     if(!density){
-        cout << "Not enough memory" << endl;;
+        returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
     }
 
 
     size_cluster= new (nothrow) double[clusters.size() * sizeof(double)];
     if(!size_cluster){
-        cout << "Not enough memory" << endl;;
+        returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
     }
     double pji; // probability that a point is in the i-th tile of the j-th cluster
@@ -546,7 +538,7 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
 
     tile_points = new (nothrow) double*[clusters.size()];
     if(!tile_points){
-        cout << "Not enough memory\n";
+        returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
     }
     // allocating vectors that will contain n° of points for each tile i of respective cluster j
@@ -554,7 +546,8 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
         //cout << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
         tile_points[j] = new (nothrow) double[clusters.at(j).size()];
         if (!tile_points[j]) {
-            cout << "Not enough memory allocating the " << j << "-th tile_points array" << endl;
+            cerr << "Not enough memory allocating the " << j << "-th tile_points array" << endl;
+            returnValue = memoryError(__FUNCTION__);
             goto ON_EXIT;
         }
     }

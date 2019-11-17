@@ -1,5 +1,10 @@
 /** @file   */
 
+/**
+* @author Antonio Mariani
+* @date 4/10/19
+*/
+
 #include <iostream>
 #include <igraph/igraph.h>
 #include <cstring>
@@ -7,6 +12,41 @@
 #include "raster.h"
 #include "error.h"
 
+/*** Default Parameters***/
+const int           peers = 10; // number of peers
+const int           fanOut = 3; //fan-out of peers
+const int           graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
+const double        convThreshold = 0.0001; // local convergence tolerance
+const int           convLimit = 3; // number of consecutive rounds in which a peer must locally converge
+const int           roundsToExecute = -1;
+const double        precision = -4.2;
+const int           threshold = 2;
+const int           min_size = 3;
+const int           radius = 0;
+const int           maxDistance = 2;
+const int           typeAlgorithm = 0;
+const int           minSquares = 1;
+const string        name_file = "../Datasets/S-sets/s1.csv";
+const string        outputFilename;
+
+/*!< @struct Params - A structure containing parameters read from command-line.  */
+struct Params {
+    int         peers;             /*!< The number of peers */
+    string      outputFilename;    /*!< The path for the output file */
+    double      convThreshold;     /*!< The local convergence tolerance for the consensus algorithm */
+    int         convLimit;         /*!< The number of consecutive rounds in which a peer must locally converge */
+    int         graphType;         /*!< The graph distribution: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique) */
+    int         radius;            /*!< Parameter for graph generation */
+    int         fanOut;            /*!< The number of communication that a peer can carry out in a round (-1 ability communication with all neighbors) */
+    int         roundsToExecute;   /*!< The number of rounds to carry out in the consensus algorithm */
+    double      precision;         /*!< Raster parameters that determines tile dimension */
+    int         threshold;         /*!< Raster parameters that establish if maintain or not a tile */
+    int         min_size;          /*!< Raster parameters that establish the minimum number of tile in order to form a cluster */
+    int         maxDistance;       /*!< Max distance in order to consider two cluster the same */
+    int         minSquares;        /*!< minimum squares for each peer from checkerboard partition*/
+    string      name_file;         /*!< The path for the input CSV file */
+    int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
+};
 
 /**
  * This function compute the Manhattan distance between two points p1,p2
@@ -61,8 +101,6 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
  * @return 0 if success, -3 in case of bad data structures, -2 in case of insert error, -4 in case of arithmetic error
  */
 int clusterUnion(unSet3 &clusterN, unSet3 &clusterP);
-// to delete
-void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection);
 
 
 /**
@@ -160,6 +198,7 @@ int checkPartitioning(long *peerLastItem, int peers, int ni);
  */
 int generateGraph(igraph_t &graph, int peers, int graphType);
 
+
 /**
  * This function print on terminal tha minimum and maximum vertex degree
  *
@@ -181,21 +220,47 @@ int graphProperties(igraph_t &graph);
  * @param [in] fanOut
  * @return The dimension of neighbors
  */
-int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int peerID, int fanOut);
+int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int fanOut);
 
 
-int checkFirstConvegence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged);
+
+int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged);
+
 
 
 int restoreCardinality(hashmap &projection, int dimestimate);
 
+
+
 int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY,
                     int q, int p, int minX, int minY, int maxX, int maxY );
 
+
 int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minSquares);
+
+
 
 int getSquaresCoordinate(int &x1, int &y1, int &y2, int &x2, int p, int q, int dimestimate,
                          int minX, int minY, int maxX, int maxY, int k, int peerID);
+
+
+int filterProjection(hashmap &projection, hashmap &squareProjection, int *x1, int *y1, int *y2, int *x2, int squares);
+
+
+
+int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID);
+
+
+int getParameters(int argc, char** argv, Params &params);
+
+
+int initParams(Params &params);
+
+
+int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, double *dimestimate);
+
+
+int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, vector<array<int, 2>> *centroids);
 
 
 /**
@@ -218,6 +283,7 @@ double StopTheClock();
  */
 void usage(char* cmd);
 
+
 igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius);
 igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A);
 igraph_t generateErdosRenyiGraph(igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param);
@@ -228,25 +294,7 @@ void printGraphType(int type);
 using namespace std;
 using namespace std::chrono;
 
-/*!< @struct Params - A structure containing parameters read from command-line.  */
-struct Params {
-    int        ni;                /*!< The number of point of dataset */
-    int         peers;             /*!< The number of peers */
-    string      outputFilename;    /*!< The path for the output file */
-    double      convThreshold;     /*!< The local convergence tolerance for the consensus algorithm */
-    int         convLimit;         /*!< The number of consecutive rounds in which a peer must locally converge */
-    int         graphType;         /*!< The graph distribution: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique) */
-    int         radius;            /*!< Parameter for graph generation */
-    int         fanOut;            /*!< The number of communication that a peer can carry out in a round (-1 ability communication with all neighbors) */
-    int         roundsToExecute;   /*!< The number of rounds to carry out in the consensus algorithm */
-    double      precision;         /*!< Raster parameters that determines tile dimension */
-    int         threshold;         /*!< Raster parameters that establish if maintain or not a tile */
-    int         min_size;          /*!< Raster parameters that establish the minimum number of tile in order to form a cluster */
-    int         maxDistance;       /*!< Max distance in order to consider two cluster the same */
-    int         minSquares;        /*!< minimum squares for each peer from checkerboard partition*/
-    string      name_file;         /*!< The path for the input CSV file */
-    int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
-};
+
 
 void parametersSummary(Params params);
 
@@ -255,138 +303,38 @@ high_resolution_clock::time_point t1, t2;
  *
  * @param argc
  * @param argv
- * @return 0 if success, -1 in case of memory error, -8 in case of dataset error
+ * @return 0 if success, -1 in case of memory error
  */
 int main(int argc, char **argv) {
-    /*** Default Parameters***/
-    int        ni; // points number
-    int         peers = 10; // number of peers
-    int         fanOut = 3; //fan-out of peers
-    int         graphType = 2; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
-    double      convThreshold = 0.0001; // local convergence tolerance
-    int         convLimit = 3; // number of consecutive rounds in which a peer must locally converge
-    int         roundsToExecute = -1;
-    double      precision = -4.2;
-    int         threshold = 2;
-    int         min_size = 3;
-    int         radius = 0;
-    int         maxDistance = 2;
-    int         typeAlgorithm = 0;
-    int         minSquares = 1;
-    string      name_file = "../Datasets/S-sets/s1.csv";
-
-    bool            outputOnFile = false;
+    int returnValue = -1;
+    bool            outputOnFile;
     string          outputFilename;
     igraph_t        graph;
     Params          params;
-
-    int start;
+    int             ni;
+    int             start;
+    double          mergeprojectiontime;
+    double          rastertime;
+    double          gengraphtime;
 
     /*** Array declarations ***/
     long *peerLastItem = nullptr; // index of a peer last item
     double *dataset_storage = nullptr;
     double **dataset = nullptr;
-    hashmap *projection = nullptr;
     double *dimestimate = nullptr;
-    double *prevestimate = nullptr;
-    bool *converged = nullptr;
-    int *convRounds = nullptr;
-    int *minX = nullptr;
-    int *minY = nullptr;
-    int *maxX = nullptr;
-    int *maxY = nullptr;
-    int** y1 = nullptr;
-    int** x1 = nullptr;
-    int** y2 = nullptr;
-    int** x2 = nullptr;
-    int* q = nullptr;
-    int* p = nullptr;
-    int* squares = nullptr;
+    hashmap *projection = nullptr;
     hashmap *squareProjection = nullptr;
+    vectorSet3 *clusters3 = nullptr;
+    vector<array<int, 2>> *centroids = nullptr;
+    vectorSet2 *clusters2 = nullptr;
 
-    /*** parse command-line parameters ***/
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-p") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of peers parameter." << endl;
-                return -1;
-            }
-            peers = stoi(argv[i]);
-        }  else if (strcmp(argv[i], "-f") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing fan-out parameter." << endl;
-                return -1;
-            }
-            fanOut = stoi(argv[i]);;
-        } else if (strcmp(argv[i], "-d") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing graph type parameter" << endl;
-                return -1;
-            }
-            graphType = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-ct") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing convergence tolerance parameter." << endl;
-                return -1;
-            }
-            convThreshold = stod(argv[i]);
-        } else if (strcmp(argv[i], "-cl") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing # of consecutive rounds in which convergence is satisfied parameter." << endl;
-                return -1;
-            }
-            convLimit = stol(argv[i]);
-        } else if (strcmp(argv[i], "-of") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing filename for simulation output." << endl;
-                return -1;
-            }
-            outputFilename = string(argv[i]);
-        } else if (strcmp(argv[i], "-r") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of rounds to execute.\n";
-                return -1;
-            }
-            roundsToExecute = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-pr") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of precision for raster.\n";
-                return -1;
-            }
-            precision = stod(argv[i]);
-        } else if (strcmp(argv[i], "-thr") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of threshold for raster.\n";
-                return -1;
-            }
-            threshold = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-ms") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of min size for raster.\n";
-                return -1;
-            }
-            min_size = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-dt") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing file name of dataset.\n";
-                return -1;
-            }
-            name_file = argv[i];
-        } else {
-            usage(argv[0]);
-            return -1;
-        }
+    /** assign parameters read from command line */
+    initParams(params);
+    getParameters(argc, argv, params);
+
+    outputOnFile = !params.outputFilename.empty();
+    if (!outputOnFile) {
+        parametersSummary(params);
     }
 
     /*** read dataset dimensions ***/
@@ -404,44 +352,22 @@ int main(int argc, char **argv) {
     peerLastItem = new (nothrow) long[peers]();
     if (!peerLastItem)
         return memoryError(__FUNCTION__);
-    if (partitionDataset(peerLastItem, peers, ni))
-        return partitionError(__FUNCTION__);
+
+    if (partitionDataset(peerLastItem, peers, ni)){
+        returnValue = partitionError(__FUNCTION__);
+        goto ON_EXIT;
+    }
 
     /** check the partitioning correctness */
     if (checkPartitioning(peerLastItem, peers, ni))
         return partitionError(__FUNCTION__);
-
-
-    /** assign parameters read from command line */
-    params.name_file = name_file;
-    params.ni = ni;
-    params.peers = peers;
-    params.fanOut = fanOut;
-    params.graphType = graphType;
-    params.convThreshold = convThreshold;
-    params.convLimit = convLimit;
-    params.outputFilename = outputFilename;
-    params.roundsToExecute = roundsToExecute;
-    params.precision = precision;
-    params.threshold = threshold;
-    params.min_size = min_size;
-    params.radius = radius;
-    params.maxDistance = maxDistance;
-    params.typeAlgorithm = typeAlgorithm;
-    params.minSquares = minSquares;
-
-    outputOnFile = !params.outputFilename.empty();
-
-    if (!outputOnFile) {
-        parametersSummary(params);
-    }
 
     /** Graph generation */
     StartTheClock();
     // generate a connected random graph
     generateGraph(graph, peers, params.graphType);
 
-    double gengraphtime = StopTheClock();
+    gengraphtime = StopTheClock();
     if (!outputOnFile) {
         cout <<"Time (seconds) required to generate the random graph: " << gengraphtime << "\n";
     }
@@ -454,7 +380,7 @@ int main(int argc, char **argv) {
         cout << "\nApply first Raster projection to each peer's dataset...\n";
     }
 
-    projection = new (nothrow) unordered_map<array<int, 2>, double, container_hasher>[params.peers];
+    projection = new (nothrow) hashmap[params.peers];
     if(!projection)
         return memoryError(__FUNCTION__);
 
@@ -467,7 +393,7 @@ int main(int argc, char **argv) {
         start = peerLastItem[peerID] + 1;
     }
 
-    double rastertime = StopTheClock();
+    rastertime = StopTheClock();
     if (!outputOnFile) {
         cout << "Raster done!\n";
         cout << "Time (seconds) required by first (distributed) Raster projection: " << rastertime << endl;
@@ -477,76 +403,13 @@ int main(int argc, char **argv) {
     dimestimate = new (nothrow) double[params.peers]();
     if (!dimestimate)
         return memoryError(__FUNCTION__);
+
     dimestimate[0] = 1;
 
-    prevestimate = new (nothrow) double[params.peers]();
-    if (!prevestimate)
-        return memoryError(__FUNCTION__);
-
-    int Numberofconverged = params.peers;
-
-    converged = new (nothrow) bool[params.peers]();
-    if (!converged)
-        return memoryError(__FUNCTION__);
-
-    for(int i = 0; i < params.peers; i++)
-        converged[i] = false;
-
-    convRounds = new (nothrow) int[params.peers]();
-    if (!convRounds)
-        return memoryError(__FUNCTION__);
-
-    int rounds = 0;
-
-    if (!outputOnFile) {
-        cout <<"\nStarting distributed agglomeration merge..." << endl;
-    }
     StartTheClock();
-    /*** Merge information about agglomeration ***/
-    while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
+    distributedProjection(params, graph, projection, dimestimate);
 
-        memcpy(prevestimate, dimestimate, params.peers * sizeof(double));
-
-        for(int peerID = 0; peerID < params.peers; peerID++){
-            // determine peer neighbors
-            igraph_vector_t neighbors;
-            igraph_vector_init(&neighbors, 0);
-            igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
-
-            long neighborsSize = getNeighborsSize(graph, neighbors, peerID, fanOut);
-
-            for(int i = 0; i < neighborsSize; i++){
-                int neighborID = (int) VECTOR(neighbors)[i];
-                igraph_integer_t edgeID;
-                igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
-
-                if (projectionMerge(projection[neighborID], projection[peerID])) {
-                    return mergeError(__FUNCTION__);
-                }
-
-                double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
-                dimestimate[peerID] = mean;
-                dimestimate[neighborID] = mean;
-            }
-
-            igraph_vector_destroy(&neighbors);
-        }
-
-        // check local convergence
-        if (params.roundsToExecute < 0) {
-            for(int peerID = 0; peerID < params.peers; peerID++){
-                if(converged[peerID])
-                    continue;
-                checkFirstConvegence(prevestimate[peerID], dimestimate[peerID], params.convThreshold, convRounds[peerID], converged[peerID], params.convLimit, Numberofconverged);
-            }
-        }
-        rounds++;
-        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
-
-        params.roundsToExecute--;
-    }
-
-    double mergeprojectiontime = StopTheClock();
+    mergeprojectiontime = StopTheClock();
     if (!outputOnFile) {
         cout << "Merge Raster projection done!\n";
         cout << "Time (seconds) required by merge Raster projection: " << mergeprojectiontime << endl;
@@ -567,263 +430,46 @@ int main(int argc, char **argv) {
     }
 
     if (params.typeAlgorithm == 0) {
-        minX = new (nothrow) int[params.peers];
-        if (!minX)
-            return memoryError(__FUNCTION__);
-        minY = new (nothrow) int[params.peers];
-        if (!minY)
-            return memoryError(__FUNCTION__);
-        maxX = new (nothrow) int[params.peers];
-        if (!maxX)
-            return memoryError(__FUNCTION__);
-        maxY = new (nothrow) int[params.peers];
-        if (!maxY)
-            return memoryError(__FUNCTION__);
-
-        /*** Simultaneous minimum and maximum algorithm***/
-        for(int peerID = 0; peerID < params.peers; peerID++){
-            simultaneousMaxMin(projection[peerID], &maxX[peerID], &minX[peerID], &maxY[peerID], &minY[peerID]);
-        }
-
-        /// (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
-        /// (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
-        /*** x1,x2,y1,y2 are matrices with dimension of n° peers x squares[peerID] (some peer can have an extra square from checkerboard partition) ***/
-        y1 = new (nothrow) int*[params.peers];
-        if (!y1)
-            return memoryError(__FUNCTION__);
-        x1 = new (nothrow) int*[params.peers];
-        if (!x1)
-            return memoryError(__FUNCTION__);
-        y2 = new (nothrow) int*[params.peers];
-        if (!y2)
-            return memoryError(__FUNCTION__);
-        x2 = new (nothrow) int*[params.peers];
-        if (!x2)
-            return memoryError(__FUNCTION__);
-
-        /// domain of dataset is divide in a grid p*q
-        q = new (nothrow) int[params.peers];
-        if (!q)
-            return memoryError(__FUNCTION__);
-        p = new (nothrow) int[params.peers];
-        if (!p)
-            return memoryError(__FUNCTION__);
-
-        /// how much square for each peer ( if p*q % peers != 0 some peers will have one extra square)
-
-        squares = new (nothrow) int[params.peers];
-        if (!squares)
-            return memoryError(__FUNCTION__);
-
-        /*** Each peer obtain its "square(s)" coordinate(s)***/
-        for(int peerID = 0; peerID < params.peers; peerID++) {
-            /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
-            getGridSize(p[peerID], q[peerID],(int) dimestimate[peerID], params.minSquares);
-
-            /// peer gets its number of squares
-            getSquares(squares[peerID], peerID, p[peerID], q[peerID], dimestimate[peerID], params.minSquares);
-
-            y1[peerID] = new (nothrow) int[squares[peerID]];
-            if (!y1[peerID])
-                return memoryError(__FUNCTION__);
-            x1[peerID] = new (nothrow) int[squares[peerID]];
-            if (!x1[peerID])
-                return memoryError(__FUNCTION__);
-            y2[peerID] = new (nothrow) int[squares[peerID]];
-            if (!y2[peerID])
-                return memoryError(__FUNCTION__);
-            x2[peerID] = new (nothrow) int[squares[peerID]];
-            if (!x2[peerID])
-                return memoryError(__FUNCTION__);
-
-            for (int k = 0; k < squares[peerID]; k++) {
-                /// Compute coordinate for k-th square
-                getSquaresCoordinate(x1[peerID][k],y1[peerID][k], y2[peerID][k], x2[peerID][k], p[peerID], q[peerID],
-                        dimestimate[peerID], minX[peerID], minY[peerID], maxX[peerID], maxY[peerID], k, peerID);
-            }
-
-        }
-        delete[] p, p = nullptr;
-        delete[] q, q = nullptr;
-
-        delete[] minX, minX = nullptr;
-        delete[] minY, minY = nullptr;
-        delete[] maxX, maxX = nullptr;
-        delete[] maxY, maxY = nullptr;
-
-        /*** Each peer find the tiles in own square(s)***/
-
-        squareProjection = new (nothrow) hashmap[params.peers];
+        squareProjection = new (nothrow) hashmap[peers];
         if (!squareProjection)
             return memoryError(__FUNCTION__);
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
-            int skip;
-            hashmap::iterator it;
-            it = projection[peerID].begin();
-            while (it != projection[peerID].end()) {
-                skip = 0;
-                int a = (it -> first)[0];
-                int b = (it -> first)[1];
-                /*** Check if the tile is in one of peer square***/
-                for (int k = 0; k < squares[peerID]; k++) {
-                    if (a <= x1[peerID][k] && a > x2[peerID][k] && b <= y1[peerID][k] && b > y2[peerID][k]) {
-                        (squareProjection[peerID])[it -> first] = it -> second;
-                        projection[peerID].erase(it++);
-                        skip = 1;
-                        break;
-                    }
-                }
-                if (!skip)
-                    it++;
-            }
+            getSquareProjection(params.minSquares, projection[peerID], dimestimate[peerID], squareProjection[peerID], peerID);
         }
-
-        delete[] squares;
-
-        for(int peerID = 0; peerID < params.peers; peerID++) {
-            delete[] x1[peerID];
-            delete[] y1[peerID];
-            delete[] x2[peerID];
-            delete[] y2[peerID];
-        }
-
-        delete[] x1;
-        delete[] y1;
-        delete[] x2;
-        delete[] y2;
 
         if (!outputOnFile) {
             cout <<"\nStarting local clustering..." << endl;
         }
         StartTheClock();
 
-
         /***Each peer clustering its own tiles and compute centroids of clusters***/
-        vectorSet3 *clusters;
-        try {
-            clusters = new vector<unordered_set<array<int, 3>, container_hasher>>[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
 
-        vector<array<int, 2>> *centroids;
-        try {
-            centroids = new vector<array<int, 2>>[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
-        for(int peerID = 0; peerID < params.peers; peerID++) {
-            clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters[peerID]);
-            getCentroids(clusters[peerID], centroids[peerID]);
-        }
+        clusters3 = new (nothrow) vectorSet3[params.peers];
+        if (!clusters3)
+            return memoryError(__FUNCTION__);
+
+        centroids = new (nothrow) vector<array<int, 2>>[params.peers];
+        if (!centroids)
+            return memoryError(__FUNCTION__);
 
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
-            projection[peerID].clear();
-            squareProjection[peerID].clear();
+            clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
+            getCentroids(clusters3[peerID], centroids[peerID]);
         }
-        delete[] projection;
-        delete[] squareProjection;
+
+        delete[] projection, projection = nullptr;
+        delete[] squareProjection, squareProjection = nullptr;
 
         double clustertime = StopTheClock();
         if (!outputOnFile) {
             cout << "Local clustering done!\n";
             cout << "Time (seconds) required by local Raster clustering: " << clustertime << endl;
         }
-
-        double *clustersestimate;
-        try {
-            clustersestimate = new double[params.peers]();
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
-        double *prevclustersestimate;
-        try {
-            prevclustersestimate = new double[params.peers]();
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
-        for(int i = 0; i < params.peers; i++)
-            clustersestimate[i] = (double )clusters[i].size();
-
-        // Reinitialize some parameters
-        for(int i = 0; i < params.peers; i++){
-            converged[i] = false;
-            convRounds[i] = 0;
-        }
-
-        // reinitialize some parameters
-        rounds = 0;
-        params.roundsToExecute = roundsToExecute;
-        Numberofconverged = params.peers;
-
-        if (!outputOnFile) {
-            cout <<"\nStarting distributed merge of clusters..." << endl;
-        }
-
         StartTheClock();
-        /*** Start distributed cluster merge***/
-        while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
 
-            memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(double));
-
-            for(int peerID = 0; peerID < params.peers; peerID++){
-
-                // determine peer neighbors
-                igraph_vector_t neighbors;
-                igraph_vector_init(&neighbors, 0);
-                igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
-
-                long neighborsSize = getNeighborsSize(graph, neighbors, peerID, fanOut);
-
-                for(int i = 0; i < neighborsSize; i++){
-                    int neighborID = (int) VECTOR(neighbors)[i];
-                    igraph_integer_t edgeID;
-                    igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
-
-                    clustersMerge(clusters[neighborID], clusters[peerID], centroids[neighborID], centroids[peerID], params.maxDistance);
-
-                    clustersestimate[peerID] = (double) clusters[peerID].size();
-                    clustersestimate[neighborID] = (double) clusters[neighborID].size();
-
-                }
-
-                igraph_vector_destroy(&neighbors);
-            }
-
-            // check local convergence
-            if (params.roundsToExecute < 0) {
-                for(int peerID = 0; peerID < params.peers; peerID++){
-
-                    if(converged[peerID])
-                        continue;
-
-                    bool clustersestimateconv;
-                    if(prevclustersestimate[peerID])
-                        clustersestimateconv = fabs((prevclustersestimate[peerID] - clustersestimate[peerID])) == 0;
-                    else
-                        clustersestimateconv = false;
-
-                    if(clustersestimateconv)
-                        convRounds[peerID]++;
-                    else
-                        convRounds[peerID] = 0;
-
-                    converged[peerID] = (convRounds[peerID] >= params.convLimit);
-                    if(converged[peerID]){
-                        Numberofconverged --;
-                    }
-                }
-            }
-            rounds++;
-            cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
-            params.roundsToExecute--;
-        }
+        distributedCluster(params, clusters3, graph, centroids);
 
         double mergeclustertime = StopTheClock();
         if (!outputOnFile) {
@@ -834,25 +480,21 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            printClusters(clusters[peerID], peerID);
+            printClusters(clusters3[peerID], peerID);
         }
         cout << "\n\n";
 
-        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
-        unordered_map<array<int, 2>, double, container_hasher> proj;
+        hashmapUnset all_points;
+        hashmap proj;
         mapToTilesPrime(dataset, precision, threshold, ni, proj, all_points);
-        printAllPointsClustered(clusters[0], all_points);
+        printAllPointsClustered(clusters3[0], all_points);
 
-        delete[] prevclustersestimate;
     } else {
 
-        vector<unordered_set<array<int, 2>, container_hasher>> *clusters;
-        try {
-            clusters = new vector<unordered_set<array<int, 2>, container_hasher>>[params.peers];
-        } catch (bad_alloc& ba) {
-            cerr << "bad_alloc caught: " << ba.what() << '\n';
-            exit(-1);
-        }
+        clusters2 = new (nothrow) vectorSet2[params.peers];
+        if (!clusters2)
+            return memoryError(__FUNCTION__);
+
         if (!outputOnFile) {
             cout <<"\nEach peer clustering the global projection..." << endl;
         }
@@ -860,7 +502,7 @@ int main(int argc, char **argv) {
         StartTheClock();
 
         for(int peerID = 0; peerID < params.peers; peerID++){
-            clusteringTiles(projection[peerID], params.min_size, clusters[peerID]);
+            clusteringTiles(projection[peerID], params.min_size, clusters2[peerID]);
         }
 
         double clustertime = StopTheClock();
@@ -872,28 +514,48 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            printClusters(clusters[peerID], peerID);
+            printClusters(clusters2[peerID], peerID);
         }
         cout << "\n\n";
 
-        unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> all_points;
-        unordered_map<array<int, 2>, double, container_hasher> proj;
+        hashmapUnset all_points;
+        hashmap proj;
         mapToTilesPrime(dataset, precision, threshold, ni, proj, all_points);
-        printAllPointsClustered(clusters[0], all_points);
+        printAllPointsClustered(clusters2[0], all_points);
     }
 
+    returnValue = 0;
 
+    ON_EXIT:
 
+    if (clusters2 != nullptr)
+        delete[] clusters2, clusters2 = nullptr;
 
-    delete[] dimestimate;
-    delete[] peerLastItem;
-    delete[] converged;
-    delete[] dataset;
-    delete[] dataset_storage;
-    delete[] prevestimate;
-    delete[] convRounds;
+    if (centroids != nullptr)
+        delete[] centroids, centroids = nullptr;
 
-    return 0;
+    if (clusters3 != nullptr)
+        delete[] clusters3, clusters3 = nullptr;
+
+    if (squareProjection != nullptr)
+        delete[] squareProjection, squareProjection = nullptr;
+
+    if (projection != nullptr)
+        delete[] projection, projection = nullptr;
+
+    if (dimestimate != nullptr)
+        delete[] dimestimate, dimestimate = nullptr;
+
+    if (peerLastItem != nullptr)
+        delete[] peerLastItem, peerLastItem = nullptr;
+
+    if (dataset != nullptr)
+        delete[] dataset, dataset = nullptr;
+
+    if (dataset_storage != nullptr)
+        delete[] dataset_storage, dataset_storage = nullptr;
+
+    return returnValue;
 
 }
 
@@ -902,7 +564,7 @@ int manhattanDistance(int x1, int x2, int y1, int y2) {
 }
 
 int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
-    if (clusters.size() <= 0) {
+    if (clusters.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -914,7 +576,7 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
         n = 0, x = 0, y = 0;
-        if (!clusters.at(j).size()) {
+        if (clusters.at(j).empty()) {
             cerr << "Bad cluster structure" << endl;
             centroids.clear();
             return dataError(__FUNCTION__);
@@ -931,27 +593,6 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
     }
 
     return 0;
-}
-
-//remove
-void printOrderedProjection(int peerID, int peers, unordered_map<array<int, 2>, double, container_hasher> &projection) {
-    ofstream outfile(to_string(peerID) +".csv");
-    set<array<int,2>> data;
-    unordered_map<array<int, 2>, double, container_hasher>::iterator it;
-    set<array<int,2>>::iterator it2;
-    it = projection.begin();
-    while (it != projection.end()) {
-        data.insert(it -> first);
-        it++;
-    }
-
-    it2 = data.begin();
-    while (it2 != data.end()) {
-        outfile << "tile: " << (*it2)[0] << "," << (*it2)[1] << "\n";
-        it2++;
-    }
-    outfile.close();
-
 }
 
 int simultaneousMaxMin(hashmap &projection, int *maxX, int *minX, int *maxY, int *minY) {
@@ -1290,7 +931,6 @@ int readDataset(double **dataset_storage, double ***dataset, string name_file, i
     return 0;
 }
 
-
 int partitionDataset(long *peerLastItem, int peers, int ni) {
     std::random_device rd; /** obtain a random number from hardware */
     std::mt19937 eng(rd()); /** seed the generator */
@@ -1511,7 +1151,6 @@ void printGraphType(int type)
 void parametersSummary(Params params) {
     cout << "\n\nPARAMETERS:\n";
     cout << "dataset = " << params.name_file << "\n";
-    cout << "n° points = " << params.ni << "\n";
     cout << "precision = " << params.precision << "\n";
     cout << "threshold = " << params.threshold << "\n";
     cout << "min size = " << params.min_size << "\n";
@@ -1552,7 +1191,7 @@ int graphProperties(igraph_t &graph) {
     return 0;
 }
 
-int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int peerID, int fanOut) {
+int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int fanOut) {
     long neighborsSize = igraph_vector_size(&neighbors);
     if(fanOut < neighborsSize && fanOut != -1){
         // randomly sample f adjacent vertices
@@ -1564,7 +1203,8 @@ int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int peerID, in
     return neighborsSize;
 }
 
-int checkFirstConvegence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged) {
+int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold,
+        int &convRounds, bool &converged, int convLimit, int &Numberofconverged) {
     bool dimestimateconv;
     if(prevestimate)
         dimestimateconv = fabs((prevestimate - dimestimate) / prevestimate) < convThreshold;
@@ -1580,6 +1220,8 @@ int checkFirstConvegence(double prevestimate, double dimestimate, double convThr
     if(converged){
         Numberofconverged --;
     }
+
+    return 0;
 }
 
 int restoreCardinality(hashmap &projection, int dimestimate) {
@@ -1589,6 +1231,8 @@ int restoreCardinality(hashmap &projection, int dimestimate) {
         it->second = round(it->second * dimestimate);
         it++;
     }
+
+    return 0;
 }
 
 int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY,
@@ -1617,7 +1261,7 @@ int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minS
 }
 
 int getSquaresCoordinate(int &x1, int &y1, int &y2, int &x2, int p, int q, int dimestimate,
-                         int minX, int minY, int maxX, int maxY, int k, int peerID) {
+        int minX, int minY, int maxX, int maxY, int k, int peerID) {
     int i, j;
     int nTilesY, nTilesX, restTilesY, restTilesX;
     /// compute how group tiles for each square on y and x axis
@@ -1640,5 +1284,415 @@ int getSquaresCoordinate(int &x1, int &y1, int &y2, int &x2, int p, int q, int d
 
     return 0;
 }
+int filterProjection(hashmap &projection, hashmap &squareProjection, int *x1, int *y1, int *y2, int *x2, int squares) {
+    int skip;
+    hashmap::iterator it;
+    it = projection.begin();
+    while (it != projection.end()) {
+        skip = 0;
+        int a = (it -> first)[0];
+        int b = (it -> first)[1];
+        /*** Check if the tile is in one of peer square***/
+        for (int k = 0; k < squares; k++) {
+            if (a <= x1[k] && a > x2[k] && b <= y1[k] && b > y2[k]) {
+                (squareProjection)[it -> first] = it -> second;
+                projection.erase(it++);
+                skip = 1;
+                break;
+            }
+        }
+        if (!skip)
+            it++;
+    }
 
+    return 0;
+}
+
+int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID) {
+    int returnValue = -1;
+    int minX, minY, maxX, maxY;
+    int q, p;
+    int squares;
+
+    /// (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
+    /// (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
+    /// x1,x2,y1,y2 are matrices with dimension of n° peers x squares[peerID] (some peer can have an extra square from checkerboard partition)
+    int* y1 = nullptr;
+    int* x1 = nullptr;
+    int* y2 = nullptr;
+    int* x2 = nullptr;
+    /*** Simultaneous minimum and maximum algorithm***/
+    simultaneousMaxMin(projection, &maxX, &minX, &maxY, &minY);
+
+    /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
+    getGridSize(p, q,(int) dimestimate, minSquares);
+
+    /// peer gets its number of squares
+    getSquares(squares, peerID, p, q, dimestimate, minSquares);
+
+    y1 = new (nothrow) int[squares];
+    if (!y1)
+        return memoryError(__FUNCTION__);
+    x1 = new (nothrow) int[squares];
+    if (!x1) {
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+    y2 = new (nothrow) int[squares];
+    if (!y2) {
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+    x2 = new (nothrow) int[squares];
+    if (!x2) {
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+
+    for (int k = 0; k < squares; k++) {
+        /// Compute coordinate for k-th square
+        getSquaresCoordinate(x1[k],y1[k], y2[k], x2[k], p, q,
+                             dimestimate, minX, minY, maxX, maxY, k, peerID);
+    }
+
+    /*** Each peer find the tiles in own square(s)***/
+    filterProjection(projection, squareProjection, x1, y1, y2, x2, squares);
+
+    returnValue = 0;
+
+    ON_EXIT:
+    if (x1 != nullptr)
+        delete[] x1, x1 = nullptr;
+    if (y1 != nullptr)
+        delete[] y1, y1 = nullptr;
+    if (x2 != nullptr)
+        delete[] x2, x2 = nullptr;
+    if (y2 != nullptr)
+        delete[] y2, y2 = nullptr;
+
+    return returnValue;
+
+}
+
+int getParameters(int argc, char **argv, Params &params) {
+    /*** parse command-line parameters ***/
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-p") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing number of peers parameter." << endl;
+                return -1;
+            }
+            params.peers = stoi(argv[i]);
+        }  else if (strcmp(argv[i], "-f") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing fan-out parameter." << endl;
+                return -1;
+            }
+            params.fanOut = stoi(argv[i]);
+        } else if (strcmp(argv[i], "-d") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing graph type parameter" << endl;
+                return -1;
+            }
+            params.graphType = stoi(argv[i]);
+        } else if (strcmp(argv[i], "-ct") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing convergence tolerance parameter." << endl;
+                return -1;
+            }
+            params.convThreshold = stod(argv[i]);
+        } else if (strcmp(argv[i], "-cl") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing # of consecutive rounds in which convergence is satisfied parameter." << endl;
+                return -1;
+            }
+            params.convLimit = stol(argv[i]);
+        } else if (strcmp(argv[i], "-of") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing filename for simulation output." << endl;
+                return -1;
+            }
+            params.outputFilename = string(argv[i]);
+        } else if (strcmp(argv[i], "-r") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing number of rounds to execute.\n";
+                return -1;
+            }
+            params.roundsToExecute = stoi(argv[i]);
+        } else if (strcmp(argv[i], "-pr") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing number of precision for raster.\n";
+                return -1;
+            }
+            params.precision = stod(argv[i]);
+        } else if (strcmp(argv[i], "-thr") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing number of threshold for raster.\n";
+                return -1;
+            }
+            params.threshold = stoi(argv[i]);
+        } else if (strcmp(argv[i], "-ms") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing number of min size for raster.\n";
+                return -1;
+            }
+            params.min_size = stoi(argv[i]);
+        } else if (strcmp(argv[i], "-dt") == 0) {
+            i++;
+            if (i >= argc) {
+                cerr << "Missing file name of dataset.\n";
+                return -1;
+            }
+            params.name_file = argv[i];
+        } else {
+            usage(argv[0]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int initParams(Params &params) {
+    params.name_file = name_file;
+    params.peers = peers;
+    params.fanOut = fanOut;
+    params.graphType = graphType;
+    params.convThreshold = convThreshold;
+    params.convLimit = convLimit;
+    params.outputFilename = outputFilename;
+    params.roundsToExecute = roundsToExecute;
+    params.precision = precision;
+    params.threshold = threshold;
+    params.min_size = min_size;
+    params.radius = radius;
+    params.maxDistance = maxDistance;
+    params.typeAlgorithm = typeAlgorithm;
+    params.minSquares = minSquares;
+    return 0;
+}
+
+int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, double *dimestimate) {
+    int returnValue = -1;
+    int Numberofconverged;
+    int rounds;
+
+    double *prevestimate = nullptr;
+    bool *converged = nullptr;
+    int *convRounds = nullptr;
+
+
+    prevestimate = new (nothrow) double[params.peers]();
+    if (!prevestimate)
+        return memoryError(__FUNCTION__);
+
+    converged = new (nothrow) bool[params.peers]();
+    if (!converged){
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+    for(int i = 0; i < params.peers; i++)
+        converged[i] = false;
+
+    convRounds = new (nothrow) int[params.peers]();
+    if (!convRounds){
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+
+    rounds = 0;
+    Numberofconverged = params.peers;
+
+    cout <<"\nStarting distributed agglomeration merge..." << endl;
+
+    /*** Merge information about agglomeration ***/
+    while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
+
+        memcpy(prevestimate, dimestimate, params.peers * sizeof(double));
+
+        for(int peerID = 0; peerID < params.peers; peerID++){
+            // determine peer neighbors
+            igraph_vector_t neighbors;
+            igraph_vector_init(&neighbors, 0);
+            igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
+
+            long neighborsSize = getNeighborsSize(graph, neighbors, fanOut);
+
+            for(int i = 0; i < neighborsSize; i++){
+                int neighborID = (int) VECTOR(neighbors)[i];
+                igraph_integer_t edgeID;
+                igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
+
+                if (projectionMerge(projection[neighborID], projection[peerID])) {
+                    return mergeError(__FUNCTION__);
+                }
+
+                double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
+                dimestimate[peerID] = mean;
+                dimestimate[neighborID] = mean;
+            }
+
+            igraph_vector_destroy(&neighbors);
+        }
+
+        // check local convergence
+        if (params.roundsToExecute < 0) {
+            for(int peerID = 0; peerID < params.peers; peerID++){
+                if(converged[peerID])
+                    continue;
+                checkFirstConvergence(prevestimate[peerID], dimestimate[peerID], params.convThreshold,
+                                      convRounds[peerID], converged[peerID], params.convLimit, Numberofconverged);
+            }
+        }
+        rounds++;
+        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+
+        params.roundsToExecute--;
+    }
+
+    returnValue = 0;
+
+    ON_EXIT:
+
+    if (converged != nullptr)
+        delete[] converged, converged = nullptr;
+
+    if (convRounds != nullptr)
+        delete[] convRounds, convRounds = nullptr;
+
+    if (prevestimate != nullptr)
+        delete[] prevestimate, prevestimate = nullptr;
+
+    return returnValue;
+}
+
+int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, vector<array<int, 2>> *centroids) {
+    int returnValue = -1;
+    int rounds;
+    int Numberofconverged;
+
+    bool *converged = nullptr;
+    int *convRounds = nullptr;
+    double *clustersestimate = nullptr;
+    double *prevclustersestimate = nullptr;
+
+    clustersestimate = new (nothrow) double[params.peers]();
+    if (!clustersestimate)
+        return memoryError(__FUNCTION__);
+
+
+    prevclustersestimate = new (nothrow) double[params.peers]();
+    if (!prevclustersestimate) {
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+
+    for(int i = 0; i < params.peers; i++)
+        clustersestimate[i] = (double )clusters3[i].size();
+
+    converged = new (nothrow) bool[params.peers]();
+    if (!converged){
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+    for(int i = 0; i < params.peers; i++)
+        converged[i] = false;
+
+    convRounds = new (nothrow) int[params.peers]();
+    if (!convRounds){
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
+
+    // init parameters
+    rounds = 0;
+    Numberofconverged = params.peers;
+
+    cout <<"\nStarting distributed merge of clusters..." << endl;
+
+    /*** Start distributed cluster merge***/
+    while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
+
+        memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(double));
+
+        for(int peerID = 0; peerID < params.peers; peerID++){
+
+            // determine peer neighbors
+            igraph_vector_t neighbors;
+            igraph_vector_init(&neighbors, 0);
+            igraph_neighbors(&graph, &neighbors, peerID, IGRAPH_ALL);
+
+            long neighborsSize = getNeighborsSize(graph, neighbors, fanOut);
+
+            for(int i = 0; i < neighborsSize; i++){
+                int neighborID = (int) VECTOR(neighbors)[i];
+                igraph_integer_t edgeID;
+                igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
+
+                clustersMerge(clusters3[neighborID], clusters3[peerID], centroids[neighborID], centroids[peerID], params.maxDistance);
+
+                clustersestimate[peerID] = (double) clusters3[peerID].size();
+                clustersestimate[neighborID] = (double) clusters3[neighborID].size();
+
+            }
+
+            igraph_vector_destroy(&neighbors);
+        }
+
+        // check local convergence
+        if (params.roundsToExecute < 0) {
+            for(int peerID = 0; peerID < params.peers; peerID++){
+
+                if(converged[peerID])
+                    continue;
+
+                bool clustersestimateconv;
+                if(prevclustersestimate[peerID])
+                    clustersestimateconv = fabs((prevclustersestimate[peerID] - clustersestimate[peerID])) == 0;
+                else
+                    clustersestimateconv = false;
+
+                if(clustersestimateconv)
+                    convRounds[peerID]++;
+                else
+                    convRounds[peerID] = 0;
+
+                converged[peerID] = (convRounds[peerID] >= params.convLimit);
+                if(converged[peerID]){
+                    Numberofconverged --;
+                }
+            }
+        }
+        rounds++;
+        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+        params.roundsToExecute--;
+    }
+
+    returnValue = 0;
+
+    ON_EXIT:
+
+    if (converged != nullptr)
+        delete[] converged, converged = nullptr;
+
+    if (convRounds != nullptr)
+        delete[] convRounds, convRounds = nullptr;
+
+    if (clustersestimate != nullptr)
+        delete[] clustersestimate, clustersestimate = nullptr;
+
+    if (prevclustersestimate != nullptr)
+        delete[] prevclustersestimate, prevclustersestimate = nullptr;
+
+    return returnValue;
+}
 

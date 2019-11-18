@@ -19,5 +19,6 @@ int findError(string nameFunction);
 int dataError(string nameFunction);
 int arithmeticError(string nameFunction);
 int mergeError(string nameFunction);
+int graphError(string nameFunction);
 
 #endif //P2PRASTER_ERROR_H

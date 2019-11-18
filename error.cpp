@@ -95,5 +95,10 @@ int mergeError(string nameFunction) {
     return -11;
 }
 
+int graphError(string nameFunction) {
+    cerr << nameFunction << ": Graph Error" << endl;
+    return -12;
+}
+
 
 

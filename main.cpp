@@ -12,7 +12,7 @@
 #include "raster.h"
 #include "error.h"
 
-/*** Default Parameters***/
+/*** Default Parameters ***/
 const int           DEFAULT_PEERS = 10; // number of peers
 const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
@@ -61,6 +61,16 @@ struct MinMax {
     int         maxY;
 };
 
+/**
+ * Struct taht contains how much tiles group in x and y axis and eventual rest of grouping
+ */
+struct TilesGroup {
+    int nTilesY;
+    int nTilesX;
+    int restTilesY;
+    int restTilesX;
+};
+
 
 /**
  * (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
@@ -72,6 +82,16 @@ struct Coordinates {
     int         x2;
     int         y2;
 };
+
+
+/**
+ * Dimension of grid p x q for checkerboard partition
+ */
+struct Grid {
+    int p;
+    int q;
+};
+
 
 /**
  * This function compute the Manhattan distance between two points p1,p2
@@ -150,9 +170,9 @@ int simultaneousMaxMin(hashmap &projection, MinMax &minMax);
  * @param [in,out] q - How many squares on y axis
  * @param [in] peers - Number of peers in the network
  * @param [in] min - Min square for each peer
- * @return 0 if success
+ * @return 0 if success, -4 in case of arithmetic error
  */
-int getGridSize(int &p, int &q, int peers, int min);
+int getGridSize(Grid &grid, int peers, int min);
 
 
 /**
@@ -224,7 +244,7 @@ int checkPartitioning(long *peerLastItem, int peers, int ni);
  * @param graph - Structure where save graph generated
  * @param peers - Number of peers
  * @param graphType - Type of graph
- * @return 0 if success
+ * @return 0 if success, -12 in case of graph error
  */
 int generateGraph(igraph_t &graph, int peers, int graphType);
 
@@ -233,7 +253,7 @@ int generateGraph(igraph_t &graph, int peers, int graphType);
  * This function print on terminal tha minimum and maximum vertex degree
  *
  * @param graph - Structure that contains graph
- * @return
+ * @return 0 if success
  */
 int graphProperties(igraph_t &graph);
 
@@ -253,47 +273,168 @@ int graphProperties(igraph_t &graph);
 int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int fanOut);
 
 
+/**
+ * This function check if peer reaches convergence, in that case
+ * increase convRounds, when convRounds become greater than
+ * conLimit than converged is set to true.
+ * Convergence is reached when difference between prevestimate
+ * and dimestimate is less than convThreshold
+ *
+ * @param [in] prevestimate -  Number of peers estimated at round k-1
+ * @param [in] dimestimate - Number of peers estimated at round k
+ * @param [in] convThreshold - Threshold for convergence
+ * @param [in,out] convRounds - Number of consecutive rounds needed for a peer to maintain convergence
+ * @param [in,out] converged - Parameter that indicate if peer has reach convergence or not
+ * @param [in] convLimit - Minimum consecutive rounds number for convergence
+ * @return 0 if success
+ */
+int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit);
 
-int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit, int &Numberofconverged);
+
+/**
+ * This function check if peer reaches convergence, in that case
+ * increase convRounds, when convRounds become greater than
+ * conLimit than converged is set to true.
+ * Convergence is reached when prevclusterestimate is equal to
+ * clusterestimate
+ *
+ * @param [in] prevclustersestimate - Number of clusters estimated at round k-1
+ * @param [in] clustersestimate - Number of clusters estimated at round k
+ * @param [in,out] convRounds -  Number of consecutive rounds needed for a peer to maintain convergence
+ * @param [in,out] converged - Parameter that indicate if peer has reach convergence or not
+ * @param [in] convLimit - Minimum consecutive rounds number for convergence
+ * @return 0 if success
+ */
+int checkSecondConvergence(int prevclustersestimate, int clustersestimate, int &convRounds, bool &converged, int convLimit);
 
 
-
-int checkSecondConvergence(double prevclustersestimate, double clustersestimate, int &convRounds, bool &converged, int convLimit, int &Numberofconverged);
-
-
-
+/**
+ * This function iterate over all tiles into projection structure
+ * in order to restore the real cardinality by multiplying each tile
+ * cardinality (that at moment of function calling is an average)
+ * for the number of peers that partecipated at communication.
+ *
+ * @param [in,out] projection - Data structure that contains tiles with average cardinality
+ * @param [in] dimestimate - Number of peer estimated
+ * @return 0 if success, -3 in case of bad data structure
+ */
 int restoreCardinality(hashmap &projection, int dimestimate);
 
 
+/**
+ * This function compute how group tiles on x and y axis
+ * in order to form a grid p x q without cut any tile
+ *
+ * @param [in,out] tilesGroup - Struct where save how groups tiles
+ * @param [in] q - Number of squares on x axis
+ * @param [in] p - Number of squares on x axis
+ * @param [in] minMax - Coordinates of tile domain
+ * @return 0 if success, -4 in case of arithmetic error, -30 if can't group tiles
+ */
+int getTilesGroup(TilesGroup &tilesGroup, Grid grid, MinMax &minMax);
 
-int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY,
-                    int q, int p, MinMax &minMax);
+
+/**
+ * This function compute using peerID if calling peer have an extra square
+ *
+ * @param [in,out] numberOfSquares - Variable where save result
+ * @param [in] peerID - Id calling peer
+ * @param [in] p - Grid size
+ * @param [in] q - Grid size
+ * @param [in] dimestimate - Number of peers estimate
+ * @param [in] minSquares - Minimum number of squares that each peer must own
+ * @return 0 if success
+ */
+int getNumberOfSquares(int &numberOfSquares, int peerID, Grid grid, int dimestimate, int minSquares);
 
 
-int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minSquares);
+/**
+ *
+ * @param [in,out] coordinates - Structure where save coordinates of squares
+ * @param [in] grid - Size of grid for checkerboard partition
+ * @param [in] dimestimate - Number of peers estimate
+ * @param [in] minMax - Coordinates of tile domain
+ * @param [in] k - Square number of which we want the coordinates
+ * @param [in] peerID - Id of peer calling
+ * @return 0 if success, -4 in case of arithmetic error, -30 if can't group tiles
+ */
+int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, MinMax &minMax, int k, int peerID);
 
 
-
-int getSquaresCoordinate(Coordinates &coordinates, int p, int q, int dimestimate,
-                         MinMax &minMax, int k, int peerID);
-
-
+/**
+ * This function iterate over all tiles into projection, if a tile coordinate
+ * is into one of squares, remove it from projection and add to squareProjection
+ *
+ * @param [in] projection - Data structure which contains tiles
+ * @param [in,out] squareProjection - Data structure where will save only tiles into peer squares
+ * @param [in] coordinates - Structure that contains coordinates of squares
+ * @param [in] squares - Number of squares
+ * @return 0 if success, -2 in case of isnert error, -3 in case of bad data
+ */
 int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates *coordinates, int squares);
 
 
-
+/**
+ * This function insert into square projection only tiles that are into
+ * peer square of checkerboard partition
+ *
+ * @param [in] minSquares - Minimum number of squares that each peer must own
+ * @param [in,out] projection - Data structure which contains tiles
+ * @param [in] dimestimate - Number of peers estimate
+ * @param [in,out] squareProjection - Data structure where save the tiles that are inside the square
+ * @param [in] peerID - Id of peer calling
+ * @return 0 if success,-2 in case of isnert error, -3 in case of bad data structure, -4 in case of arithmetic error, -30 if can't group tiles
+ */
 int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID);
 
 
+/**
+ * This function update params structure with input
+ * inserted by command line
+ *
+ * @param [in] argc - Count of command line arguments
+ * @param [in] argv - Contains command line arguments
+ * @param [in,out] params - Structure with default params
+ * @return 0 if success
+ */
 int getParameters(int argc, char** argv, Params &params);
 
 
+/**
+ * This function initialize params with default value
+ *
+ * @param [in,out] params - Empty struct to initialize
+ * @return 0 if success
+ */
 int initParams(Params &params);
 
 
+/**
+ * This function simulates the first run of communication
+ * where each peer communicate with fanOut of its neighbor
+ * in order to merge information about projection.
+ *
+ *
+ * @param [in] params - Struct with algorithm parameters
+ * @param [in] graph - Struct that contains graph communication
+ * @param [in,out] projection - Array with all peers local projection
+ * @param [in,out] dimestimate - Variable where each peer save its estimate total number of peer in the network
+ * @return 0 if success, -1 in case of memory error, -2 in case of insert error, -3 in case of bad data structure, -4 in case of arithmetic error
+ */
 int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, double *dimestimate);
 
 
+/**
+ * This function simualates the second round of communication
+ * where each peer communicate with fanOut of its neighbor
+ * in order to merge informatio about clusters
+ *
+ * @param [in] params - Struct with algorithm parameters
+ * @param [in,out] clusters3 - Array with all peers local clusters
+ * @param [in] graph - Struct that contains graph communication
+ * @param [in,out] centroids - Array with all peers local centroids
+ * @return 0 if success, -1 in case of memory error, -25 in case of cluster union erro
+ */
 int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, vector<array<int, 2>> *centroids);
 
 
@@ -318,11 +459,11 @@ double StopTheClock();
 void usage(char* cmd);
 
 
-igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius);
-igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A);
-igraph_t generateErdosRenyiGraph(igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param);
-igraph_t generateRegularGraph(igraph_integer_t n, igraph_integer_t k);
-igraph_t generateRandomGraph(int type, int n);
+int generateGeometricGraph(igraph_t &G_graph, igraph_integer_t n, igraph_real_t radius);
+int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A);
+int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param);
+int generateRegularGraph(igraph_t &random_graph, int type, int n);
+int generateRandomGraph(igraph_t &random_graph, int type, int n);
 void printGraphType(int type);
 
 using namespace std;
@@ -706,13 +847,15 @@ int simultaneousMaxMin(hashmap &projection, MinMax &minMax) {
     return 0;
 }
 
-int getGridSize(int &p, int &q, int peers, int min) {
-    q = sqrt(peers*min);
-    if ((q * q) != peers*min) { // check if peers*min is a perfect square
-        p = q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
-        q = q * (q + 1) < peers ? ++q : q;
+int getGridSize(Grid &grid, int peers, int min) {
+    grid.q = sqrt(peers*min);
+    if (grid.q < 0 )
+        return arithmeticError(__FUNCTION__);
+    if ((grid.q * grid.q) != peers*min) { // check if peers*min is a perfect square
+        grid.p = grid.q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
+        grid.q = grid.q * (grid.q + 1) < peers ? ++grid.q : grid.q;
     } else {
-        p = q;
+        grid.p = grid.q;
     }
     return 0;
 }
@@ -1021,13 +1164,13 @@ void usage(char* cmd)
             << "  -dt   file name containing dataset\n\n";
 }
 
-igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius)
+int generateGeometricGraph(igraph_t &G_graph, igraph_integer_t n, igraph_real_t radius)
 {
-    igraph_t G_graph;
     igraph_bool_t connected;
 
     // generate a connected random graph using the geometric model
-    int a = igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
+    if (igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr))
+        return graphError(__FUNCTION__);
 
     igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     while(!connected){
@@ -1037,10 +1180,10 @@ igraph_t generateGeometricGraph(igraph_integer_t n, igraph_real_t radius)
         igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     }
 
-    return G_graph;
+    return 0;
 }
 
-igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A)
+int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A)
 {
 
     // n = The number of vertices in the graph
@@ -1048,26 +1191,11 @@ igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, ig
     // m = number of outgoing edges generated for each vertex
     // A = The probability that a vertex is cited is proportional to d^power+A, where d is its degree, power and A are given by arguments
 
-    igraph_t BA_graph;
+
     igraph_bool_t connected;
 
     // generate a connected random graph using the Barabasi-Albert model
-    igraph_barabasi_game(/* graph=    */ &BA_graph,
-            /* n=        */ n,
-            /* power=    */ power,
-            /* m=        */ m,
-            /* outseq=   */ 0,
-            /* outpref=  */ 0,
-            /* A=        */ A,
-            /* directed= */ IGRAPH_UNDIRECTED,
-            /* algo=     */ IGRAPH_BARABASI_PSUMTREE,
-            /* start_from= */ 0);
-
-
-    igraph_is_connected(&BA_graph, &connected, IGRAPH_WEAK);
-    while(!connected){
-        igraph_destroy(&BA_graph);
-        igraph_barabasi_game(/* graph=    */ &BA_graph,
+    if (igraph_barabasi_game(/* graph=    */ &BA_graph,
                 /* n=        */ n,
                 /* power=    */ power,
                 /* m=        */ m,
@@ -1076,84 +1204,106 @@ igraph_t generateBarabasiAlbertGraph(igraph_integer_t n, igraph_real_t power, ig
                 /* A=        */ A,
                 /* directed= */ IGRAPH_UNDIRECTED,
                 /* algo=     */ IGRAPH_BARABASI_PSUMTREE,
-                /* start_from= */ 0);
+                /* start_from= */ 0))
+        return graphError(__FUNCTION__);
+
+
+    igraph_is_connected(&BA_graph, &connected, IGRAPH_WEAK);
+    while(!connected){
+        igraph_destroy(&BA_graph);
+        if (igraph_barabasi_game(/* graph=    */ &BA_graph,
+                /* n=        */ n,
+                /* power=    */ power,
+                /* m=        */ m,
+                /* outseq=   */ 0,
+                /* outpref=  */ 0,
+                /* A=        */ A,
+                /* directed= */ IGRAPH_UNDIRECTED,
+                /* algo=     */ IGRAPH_BARABASI_PSUMTREE,
+                /* start_from= */ 0))
+            return graphError(__FUNCTION__);
 
         igraph_is_connected(&BA_graph, &connected, IGRAPH_WEAK);
     }
 
-    return BA_graph;
+    return 0;
 }
 
-igraph_t generateErdosRenyiGraph(igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param)
+int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param)
 {
     // n = The number of vertices in the graph
     // type = IGRAPH_ERDOS_RENYI_GNM G(n,m) graph, m edges are selected uniformly randomly in a graph with n vertices.
     //      = IGRAPH_ERDOS_RENYI_GNP G(n,p) graph, every possible edge is included in the graph with probability p
 
-    igraph_t ER_graph;
+
     igraph_bool_t connected;
 
     // generate a connected random graph using the Erdos-Renyi model
-    igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS);
+    if (igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS))
+        return graphError(__FUNCTION__);
 
     igraph_is_connected(&ER_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&ER_graph);
-        igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS);
+        if (igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS))
+            return graphError(__FUNCTION__);
 
         igraph_is_connected(&ER_graph, &connected, IGRAPH_WEAK);
     }
 
-    return ER_graph;
+    return 0;
 }
 
-igraph_t generateRegularGraph(igraph_integer_t n, igraph_integer_t k)
+int generateRegularGraph(igraph_t &R_graph, igraph_integer_t n, igraph_integer_t k)
 {
     // n = The number of vertices in the graph
     // k = The degree of each vertex in an undirected graph. For undirected graphs, at least one of k and the number of vertices must be even.
 
-
-    igraph_t R_graph;
     igraph_bool_t connected;
 
     // generate a connected regular random graph
-    igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0);
+    if (igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0))
+        return graphError(__FUNCTION__);
 
     igraph_is_connected(&R_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&R_graph);
-        igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0);
+        if (igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0))
+            return graphError(__FUNCTION__);
 
         igraph_is_connected(&R_graph, &connected, IGRAPH_WEAK);
     }
 
-    return R_graph;
+    return 0;
 }
 
-igraph_t generateRandomGraph(int type, int n)
+int generateRandomGraph(igraph_t &random_graph, int type, int n)
 {
-    igraph_t random_graph;
 
     switch (type) {
         case 1:
-            random_graph = generateGeometricGraph(n, sqrt(100.0/(float)n));
+            if (generateGeometricGraph(random_graph, n, sqrt(100.0/(float)n)))
+                return graphError(__FUNCTION__);
             break;
         case 2:
-            random_graph = generateBarabasiAlbertGraph(n, 1.0, 5, 1.0);
+            if (generateBarabasiAlbertGraph(random_graph, n, 1.0, 5, 1.0))
+                return graphError(__FUNCTION__);
             break;
         case 3:
-            random_graph = generateErdosRenyiGraph(n, IGRAPH_ERDOS_RENYI_GNP, 10.0/(float)n);
+            if (generateErdosRenyiGraph(random_graph, n, IGRAPH_ERDOS_RENYI_GNP, 10.0/(float)n))
+                return graphError(__FUNCTION__);
             // random_graph = generateErdosRenyiGraph(n, IGRAPH_ERDOS_RENYI_GNM, ceil(n^2/3));
             break;
         case 4:
-            random_graph = generateRegularGraph(n, n-1);
+            if (generateRegularGraph(random_graph, n, n-1))
+                return graphError(__FUNCTION__);
             break;
 
         default:
-            break;
+            return graphError(__FUNCTION__);
     }
 
-    return random_graph;
+    return 0;
 
 }
 
@@ -1205,7 +1355,9 @@ int generateGraph(igraph_t &graph, int peers, int graphType) {
     igraph_rng_seed(igraph_rng_default(), 42);
 
     // generate a connected random graph
-    graph = generateRandomGraph(graphType, peers);
+    if (generateRandomGraph(graph, graphType, peers))
+        return graphError(__FUNCTION__);
+
     return 0;
 }
 
@@ -1235,11 +1387,11 @@ int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int fanOut) {
     return neighborsSize;
 }
 
-int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold,
-        int &convRounds, bool &converged, int convLimit, int &Numberofconverged) {
+int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit) {
+
     bool dimestimateconv;
-    if(prevestimate)
-        dimestimateconv = fabs((prevestimate - dimestimate) / prevestimate) < convThreshold;
+    if (prevestimate)
+        dimestimateconv = fabs((prevestimate - dimestimate)/ prevestimate) < convThreshold;
     else
         dimestimateconv = false;
 
@@ -1249,17 +1401,15 @@ int checkFirstConvergence(double prevestimate, double dimestimate, double convTh
         convRounds = 0;
 
     converged = (convRounds >= convLimit);
-    if(converged){
-        Numberofconverged --;
-    }
 
     return 0;
 }
 
-int checkSecondConvergence(double prevclustersestimate, double clustersestimate, int &convRounds, bool &converged, int convLimit, int &Numberofconverged) {
+int checkSecondConvergence(int prevclustersestimate, int clustersestimate, int &convRounds, bool &converged, int convLimit) {
+
     bool clustersestimateconv;
-    if(prevclustersestimate)
-        clustersestimateconv = fabs((prevclustersestimate - clustersestimate)) == 0;
+    if (prevclustersestimate)
+        clustersestimateconv = (prevclustersestimate - clustersestimate) == 0;
     else
         clustersestimateconv = false;
 
@@ -1269,42 +1419,50 @@ int checkSecondConvergence(double prevclustersestimate, double clustersestimate,
         convRounds = 0;
 
     converged = (convRounds >= convLimit);
-    if(converged){
-        Numberofconverged --;
-    }
 
     return 0;
 }
 
 int restoreCardinality(hashmap &projection, int dimestimate) {
+    if (projection.size() == 0)
+        return dataError(__FUNCTION__);
     hashmap::iterator it;
     it = projection.begin();
     while (it != projection.end()) {
         it->second = round(it->second * dimestimate);
         it++;
     }
-
     return 0;
 }
 
-int getGroupsTiles( int &nTilesX, int &nTilesY, int &restTilesX, int &restTilesY, int q, int p, MinMax &minMax ) {
-    if (!p)
+int getTilesGroup(TilesGroup &tilesGroup, Grid grid, MinMax &minMax ) {
+    if (!grid.p)
         return arithmeticError(__FUNCTION__);
 
-    if (!q)
+    if (!grid.q)
         return arithmeticError(__FUNCTION__);
 
-    nTilesY = (minMax.maxY - minMax.minY) / q;
-    nTilesX = (minMax.maxX - minMax.minX) / p;
-    restTilesY = (minMax.maxY - minMax.minY) % q;
-    restTilesX = (minMax.maxX - minMax.minX) % p;
+    tilesGroup.nTilesY = (minMax.maxY - minMax.minY) / grid.q;
+    tilesGroup.nTilesX = (minMax.maxX - minMax.minX) / grid.p;
+    tilesGroup.restTilesY = (minMax.maxY - minMax.minY) % grid.q;
+    tilesGroup.restTilesX = (minMax.maxX - minMax.minX) % grid.p;
+
+    if (tilesGroup.nTilesX < 2) {
+        cerr << "Group tiles too small on x axis" << endl;
+        return -30;
+    }
+    if (tilesGroup.nTilesX < 2) {
+        cerr << "Group tiles too small on y axis" << endl;
+        return -30;
+    }
+
 
     return 0;
 
 }
 
-int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minSquares) {
-    if (peerID < (p * q) % (int) dimestimate ) {
+int getNumberOfSquares(int &squares, int peerID, Grid grid, int dimestimate, int minSquares) {
+    if (peerID < (grid.p * grid.q) % (int) dimestimate ) {
         squares = minSquares+1; // extra square for some peers
     } else
         squares = minSquares;
@@ -1312,21 +1470,26 @@ int getSquares(int &squares, int peerID, int p, int q, int dimestimate, int minS
     return 0;
 }
 
-int getSquaresCoordinate(Coordinates &coordinates, int p, int q, int dimestimate, MinMax &minMax, int k, int peerID) {
+int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, MinMax &minMax, int k, int peerID) {
     int i, j;
-    int nTilesY, nTilesX, restTilesY, restTilesX;
+    int check;
+    TilesGroup tG;
 
     /// compute how group tiles for each square on y and x axis
-    getGroupsTiles(nTilesX, nTilesY, restTilesX, restTilesY, q, p, minMax);
+    check = getTilesGroup(tG, grid, minMax);
+    if (check) {
+        cerr << "Can't group tiles" << endl;
+        return check;
+    }
     /// i, j are the top-right corner coordinates in a grid p x q ( they are not the real coordinates into our domain)
-    i = (peerID + k*(int)dimestimate) /p + 1;
-    j = (peerID + k*(int)dimestimate) %p + 1;
+    i = (peerID + k*(int)dimestimate) /grid.p + 1;
+    j = (peerID + k*(int)dimestimate) %grid.p + 1;
 
     /// compute real coordinates
-    coordinates.y1 = i <= restTilesY ? i * (nTilesY + 1) + minMax.minY : restTilesY * (nTilesY + 1) + (i - restTilesY) * nTilesY + minMax.minY;
-    coordinates.x1 = j <= restTilesX ? j * (nTilesX + 1) + minMax.minX : restTilesX * (nTilesX + 1) + (j - restTilesX) * nTilesX + minMax.minX;
-    coordinates.y2 = (i <= restTilesY && restTilesY != 0) ? coordinates.y1 - (nTilesY + 1) : coordinates.y1 - (nTilesY);
-    coordinates.x2 = (j <= restTilesX && restTilesX != 0) ? coordinates.x1 - (nTilesX + 1) : coordinates.x1 - (nTilesX);
+    coordinates.y1 = i <= tG.restTilesY ? i * (tG.nTilesY + 1) + minMax.minY : tG.restTilesY * (tG.nTilesY + 1) + (i - tG.restTilesY) * tG.nTilesY + minMax.minY;
+    coordinates.x1 = j <= tG.restTilesX ? j * (tG.nTilesX + 1) + minMax.minX : tG.restTilesX * (tG.nTilesX + 1) + (j - tG.restTilesX) * tG.nTilesX + minMax.minX;
+    coordinates.y2 = (i <= tG.restTilesY && tG.restTilesY != 0) ? coordinates.y1 - (tG.nTilesY + 1) : coordinates.y1 - (tG.nTilesY);
+    coordinates.x2 = (j <= tG.restTilesX && tG.restTilesX != 0) ? coordinates.x1 - (tG.nTilesX + 1) : coordinates.x1 - (tG.nTilesX);
     /// include the left and bottom edge of domain
     if (coordinates.y2 == minMax.minY)
         coordinates.y2 -= 1;
@@ -1339,6 +1502,8 @@ int getSquaresCoordinate(Coordinates &coordinates, int p, int q, int dimestimate
 }
 
 int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates *coordinates, int squares) {
+    if (projection.size() == 0)
+        return dataError(__FUNCTION__);
     int skip;
     hashmap::iterator it;
     it = projection.begin();
@@ -1349,7 +1514,9 @@ int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates
         /*** Check if the tile is in one of peer square***/
         for (int k = 0; k < squares; k++) {
             if (a <= coordinates[k].x1 && a > coordinates[k].x2 && b <= coordinates[k].y1 && b > coordinates[k].y2) {
-                (squareProjection)[it -> first] = it -> second;
+                auto check = squareProjection.insert(*it);
+                if (!check.second)
+                    return insertError(__FUNCTION__);
                 projection.erase(it++);
                 skip = 1;
                 break;
@@ -1362,36 +1529,55 @@ int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates
 }
 
 int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID) {
-    int q, p;
-    int squares;
+    int returnValue;
+    int numberOfSquares;
 
+    Grid grid;
     MinMax minMax;
     Coordinates *coordinates = nullptr;
 
     /*** Simultaneous minimum and maximum algorithm***/
-    simultaneousMaxMin(projection, minMax);
+    returnValue = simultaneousMaxMin(projection, minMax);
+    if (returnValue) {
+        cerr << "Can't get Max and Min of projection" << endl;
+        return returnValue;
+    }
 
     /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
-    getGridSize(p, q,(int) dimestimate, minSquares);
+    returnValue = getGridSize(grid,(int) dimestimate, minSquares);
+    if (returnValue) {
+        cerr << "Can't get Max and Min of projection" << endl;
+        return returnValue;
+    }
 
     /// peer gets its number of squares
-    getSquares(squares, peerID, p, q, dimestimate, minSquares);
+    getNumberOfSquares(numberOfSquares, peerID, grid, dimestimate, minSquares);
 
-    coordinates = new (nothrow) Coordinates[squares];
+    coordinates = new (nothrow) Coordinates[numberOfSquares];
     if (!coordinates)
         return memoryError(__FUNCTION__);
 
-    for (int k = 0; k < squares; k++) {
+    for (int k = 0; k < numberOfSquares; k++) {
         /// Compute coordinate for k-th square
-        getSquaresCoordinate(coordinates[k], p, q, dimestimate, minMax, k, peerID);
+        returnValue = getSquaresCoordinate(coordinates[k], grid, dimestimate, minMax, k, peerID);
+        if (returnValue) {
+            cerr << "Can't get square coordinate" << endl;
+            goto ON_EXIT;
+        }
     }
 
     /*** Each peer find the tiles in own square(s)***/
-    filterProjection(projection, squareProjection, coordinates, squares);
+    returnValue = filterProjection(projection, squareProjection, coordinates, numberOfSquares);
+    if (returnValue) {
+        cerr << "Can't get square coordinate" << endl;
+        goto ON_EXIT;
+    }
 
-    delete[] coordinates, coordinates = nullptr;
+    ON_EXIT:
+    if (coordinates != nullptr)
+        delete[] coordinates, coordinates = nullptr;
 
-    return 0;
+    return returnValue;
 
 }
 
@@ -1550,14 +1736,17 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
                 int neighborID = (int) VECTOR(neighbors)[i];
                 igraph_integer_t edgeID;
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
-
-                if (projectionMerge(projection[neighborID], projection[peerID])) {
-                    return mergeError(__FUNCTION__);
+                returnValue = projectionMerge(projection[neighborID], projection[peerID]);
+                if (returnValue) {
+                    cerr << "Can't complete projection merge" << endl;
+                    goto ON_EXIT;
                 }
-
-                double mean = (dimestimate[peerID] + dimestimate[neighborID]) / 2;
-                dimestimate[peerID] = mean;
-                dimestimate[neighborID] = mean;
+                returnValue = average(&dimestimate[peerID], dimestimate[neighborID]);
+                if (returnValue) {
+                    cerr << "Can't compute average" << endl;
+                    goto ON_EXIT;
+                }
+                dimestimate[neighborID] = dimestimate[peerID];
             }
 
             igraph_vector_destroy(&neighbors);
@@ -1568,9 +1757,12 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
             for(int peerID = 0; peerID < params.peers; peerID++){
                 if(converged[peerID])
                     continue;
-                checkFirstConvergence(prevestimate[peerID], dimestimate[peerID], params.convThreshold,
-                                      convRounds[peerID], converged[peerID], params.convLimit, Numberofconverged);
+                checkFirstConvergence(prevestimate[peerID], dimestimate[peerID], params.convThreshold,convRounds[peerID], converged[peerID], params.convLimit);
+                if(converged[peerID])
+                    Numberofconverged --;
             }
+
+
         }
         rounds++;
         cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
@@ -1601,17 +1793,17 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
 
     bool *converged = nullptr;
     int *convRounds = nullptr;
-    double *clustersestimate = nullptr;
-    double *prevclustersestimate = nullptr;
+    int *clustersestimate = nullptr;
+    int *prevclustersestimate = nullptr;
 
-    clustersestimate = new (nothrow) double[params.peers]();
+    clustersestimate = new (nothrow) int[params.peers]();
     if (!clustersestimate)
         return memoryError(__FUNCTION__);
     for(int i = 0; i < params.peers; i++)
         clustersestimate[i] = (double )clusters3[i].size();
 
 
-    prevclustersestimate = new (nothrow) double[params.peers]();
+    prevclustersestimate = new (nothrow) int[params.peers]();
     if (!prevclustersestimate) {
         returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
@@ -1638,7 +1830,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     /*** Start distributed cluster merge***/
     while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
 
-        memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(double));
+        memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(int));
 
         for(int peerID = 0; peerID < params.peers; peerID++){
 
@@ -1654,10 +1846,14 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
                 igraph_integer_t edgeID;
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
 
-                clustersMerge(clusters3[neighborID], clusters3[peerID], centroids[neighborID], centroids[peerID], params.maxDistance);
+                returnValue = clustersMerge(clusters3[neighborID], clusters3[peerID], centroids[neighborID], centroids[peerID], params.maxDistance);
+                if (returnValue) {
+                    cerr << "Can't compute average" << endl;
+                    goto ON_EXIT;
+                }
 
-                clustersestimate[peerID] = (double) clusters3[peerID].size();
-                clustersestimate[neighborID] = (double) clusters3[neighborID].size();
+                clustersestimate[peerID] = clusters3[peerID].size();
+                clustersestimate[neighborID] = clusters3[neighborID].size();
 
             }
 
@@ -1670,8 +1866,11 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
                 if(converged[peerID])
                     continue;
 
-                checkSecondConvergence(prevclustersestimate[peerID], clustersestimate[peerID],
-                                       convRounds[peerID], converged[peerID], params.convLimit, Numberofconverged);
+                checkSecondConvergence(prevclustersestimate[peerID], clustersestimate[peerID],convRounds[peerID], converged[peerID], params.convLimit);
+
+                if(converged[peerID])
+                    Numberofconverged --;
+
             }
         }
         rounds++;

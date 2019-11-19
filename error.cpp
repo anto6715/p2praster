@@ -90,11 +90,21 @@ int findError(string nameFunction) {
     return -10;
 }
 
+/**
+ *
+ * @param [in] nameFunction - Name of the calling function
+ * @return -10
+ */
 int mergeError(string nameFunction) {
     cerr << nameFunction << ": Find Error" << endl;
     return -11;
 }
 
+/**
+ *
+ * @param [in] nameFunction - Name of the calling function
+ * @return -12
+ */
 int graphError(string nameFunction) {
     cerr << nameFunction << ": Graph Error" << endl;
     return -12;

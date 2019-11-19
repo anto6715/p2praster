@@ -209,7 +209,7 @@ int average(double *x, double y);
  * @param [in] dataset - Array of pointer that pints at dataset_storage
  * @param [in] name_file - Name input file
  * @param [in,out] ni - Nu,ber of points
- * @return 0 if success, -1 in case of memory error, -7 in case of input file error
+ * @return 0 if success, -1 in case of memory error, -7 in case of input file error, -4 in case of NaN
  */
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni);
 
@@ -383,7 +383,7 @@ int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates
  * @param [in] dimestimate - Number of peers estimate
  * @param [in,out] squareProjection - Data structure where save the tiles that are inside the square
  * @param [in] peerID - Id of peer calling
- * @return 0 if success,-2 in case of isnert error, -3 in case of bad data structure, -4 in case of arithmetic error, -30 if can't group tiles
+ * @return 0 if success,-2 in case of insert error, -3 in case of bad data structure, -4 in case of arithmetic error, -30 if can't group tiles
  */
 int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID);
 
@@ -433,9 +433,17 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
  * @param [in,out] clusters3 - Array with all peers local clusters
  * @param [in] graph - Struct that contains graph communication
  * @param [in,out] centroids - Array with all peers local centroids
- * @return 0 if success, -1 in case of memory error, -25 in case of cluster union erro
+ * @return 0 if success, -1 in case of memory error, -25 in case of cluster union error
  */
 int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, vector<array<int, 2>> *centroids);
+
+
+/**
+ *
+ * @param dimestimate - Average of dimastimate from communication round
+ * @return 0 if success, -40 if dimestimate = 0
+ */
+int restoreDimestimate(double &dimestimate);
 
 
 /**
@@ -459,18 +467,84 @@ double StopTheClock();
 void usage(char* cmd);
 
 
+/**
+ *
+ * A geometric random graph is created by dropping points (=vertices)
+ * randomly to the unit square and then connecting all those pairs
+ * which are less than radius apart in Euclidean norm.
+ *
+ * @param [in,out] G_graph - Pointer to an uninitialized graph object
+ * @param [in] n - The number of vertices in the graph
+ * @param [in] radius - The radius within which the vertices will be connected
+ * @return 0 if success, -12 in case of graph error
+ */
 int generateGeometricGraph(igraph_t &G_graph, igraph_integer_t n, igraph_real_t radius);
+
+
+/**
+ * This function generates a graph based on the Barabási-Albert model
+ *
+ * @param [in,out] BA_graph - Pointer to an uninitialized graph object
+ * @param [in] n - The number of vertices in the graph
+ * @param [in] m - The number of outgoing edges generated for each vertex. (Only if outseq is NULL.)
+ * @param [in] A - The probability that a vertex is cited is proportional to d^power+A, where d is its degree (see also the outpref argument), power and A are given by arguments. In the previous versions of the function this parameter was implicitly set to one.
+ * @param [in] power - Power of the preferential attachment. The probability that a vertex is cited is proportional to d^power+A, where d is its degree (see also the outpref argument), power and A are given by arguments. In the classic preferential attachment model power=1.
+ * @return 0 if success, -12 in case of graph error
+ */
 int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A);
+
+
+/**
+ * This function generates a random (Erdos-Renyi) graph
+ *
+ * @param [in,out] ER_graph - Pointer to an uninitialized graph object
+ * @param [in] n - The number of nodes in the generated graph
+ * @param [in] type - The type of the random graph
+ * @param [in] param - This is the p parameter for G(n,p) graphs and the m parameter for G(n,m) graphs
+ * @return 0 if success, -12 in case of graph error
+ */
 int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param);
-int generateRegularGraph(igraph_t &random_graph, int type, int n);
+
+
+/**
+ * This game generates a directed or undirected random graph where
+ * the degrees of vertices are equal to a predefined constant k.
+ * For undirected graphs, at least one of k and the number of vertices
+ * must be even.
+ *
+ * @param [in,out] R_graph - Pointer to an uninitialized graph object
+ * @param [in] n - The number of nodes in the generated graph
+ * @param [in] k - The degree of each vertex in an undirected graph, or the out-degree and in-degree of each vertex in a directed graph
+ * @return 0 if success, -12 in case of graph error
+ */
+int generateRegularGraph(igraph_t &R_graph, int type, int n);
+
+
+/**
+ * This function generate the selected random graph
+ *
+ * @param [in,out] random_graph -  Pointer to an uninitialized graph objec
+ * @param [in] type - The type of the random graph: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique)
+ * @param [in] n - The number of nodes in the generated graph
+ * @return 0 if success, -12 in case of graph error
+ */
 int generateRandomGraph(igraph_t &random_graph, int type, int n);
+
+/**
+ * Print the graph type
+ *
+ * @param [in] type - The type of the random graph
+ */
 void printGraphType(int type);
 
 using namespace std;
 using namespace std::chrono;
 
 
-
+/**
+ *
+ * @param [in] params - Struct with algorithm parameters
+ */
 void parametersSummary(Params params);
 
 high_resolution_clock::time_point t1, t2;
@@ -478,7 +552,7 @@ high_resolution_clock::time_point t1, t2;
  *
  * @param argc
  * @param argv
- * @return 0 if success, -1 in case of memory error
+ * @return 0 if success, -1 in case of memory error, -7 in case of input file error
  */
 int main(int argc, char **argv) {
     int returnValue = -1;
@@ -491,6 +565,7 @@ int main(int argc, char **argv) {
     double          mergeprojectiontime;
     double          rastertime;
     double          gengraphtime;
+    double          greaddatasettime;
 
     /*** Array declarations ***/
     long *peerLastItem = nullptr; // index of a peer last item
@@ -502,23 +577,28 @@ int main(int argc, char **argv) {
     vectorSet3 *clusters3 = nullptr;
     vector<array<int, 2>> *centroids = nullptr;
     vectorSet2 *clusters2 = nullptr;
+    hashmapUnset all_points;
+    hashmap proj;
 
     /** assign parameters read from command line */
     initParams(params);
     getParameters(argc, argv, params);
 
     outputOnFile = !params.outputFilename.empty();
+
     if (!outputOnFile) {
         parametersSummary(params);
     }
 
     /*** read dataset dimensions ***/
     StartTheClock();
-    if (readDataset(&dataset_storage, &dataset, params.name_file, ni)) {
-        return readDatasetError(__FUNCTION__);
-
+    returnValue = readDataset(&dataset_storage, &dataset, params.name_file, ni);
+    if (returnValue) {
+        cerr << "Can't read dataset" << endl;
+        goto ON_EXIT;
     }
-    double greaddatasettime = StopTheClock();
+
+    greaddatasettime = StopTheClock();
     if (!outputOnFile) {
         cout <<"Time (seconds) required to load the dataset: " << greaddatasettime << "\n";
     }
@@ -528,19 +608,20 @@ int main(int argc, char **argv) {
     if (!peerLastItem)
         return memoryError(__FUNCTION__);
 
-    if (partitionDataset(peerLastItem, DEFAULT_PEERS, ni)){
-        returnValue = partitionError(__FUNCTION__);
-        goto ON_EXIT;
-    }
+    partitionDataset(peerLastItem, DEFAULT_PEERS, ni);
 
     /** check the partitioning correctness */
-    if (checkPartitioning(peerLastItem, DEFAULT_PEERS, ni))
-        return partitionError(__FUNCTION__);
+    returnValue = checkPartitioning(peerLastItem, DEFAULT_PEERS, ni);
+    if (returnValue)
+        goto ON_EXIT;
+
 
     /** Graph generation */
     StartTheClock();
     // generate a connected random graph
-    generateGraph(graph, DEFAULT_PEERS, params.graphType);
+    returnValue = generateGraph(graph, DEFAULT_PEERS, params.graphType);
+    if (returnValue)
+        goto ON_EXIT;
 
     gengraphtime = StopTheClock();
     if (!outputOnFile) {
@@ -556,17 +637,22 @@ int main(int argc, char **argv) {
     }
 
     projection = new (nothrow) hashmap[params.peers];
-    if(!projection)
-        return memoryError(__FUNCTION__);
-
+    if(!projection){
+        returnValue = memoryError(__FUNCTION__);
+        goto  ON_EXIT;
+    }
     StartTheClock();
 
     start = 0;
     for(int peerID = 0; peerID < params.peers; peerID++){
         /*** points projection ***/
-        mapToTiles(dataset, params.precision, projection[peerID], start, peerLastItem[peerID]);
+        returnValue = mapToTiles(dataset, params.precision, projection[peerID], start, peerLastItem[peerID]);
+        if(returnValue)
+            goto  ON_EXIT;
         start = peerLastItem[peerID] + 1;
     }
+
+    delete[] peerLastItem, peerLastItem = nullptr;
 
     rastertime = StopTheClock();
     if (!outputOnFile) {
@@ -576,13 +662,17 @@ int main(int argc, char **argv) {
 
     // this is used to estimate the number of peers
     dimestimate = new (nothrow) double[params.peers]();
-    if (!dimestimate)
-        return memoryError(__FUNCTION__);
+    if (!dimestimate){
+        returnValue = memoryError(__FUNCTION__);
+        goto  ON_EXIT;
+    }
 
     dimestimate[0] = 1;
 
     StartTheClock();
-    distributedProjection(params, graph, projection, dimestimate);
+    returnValue = distributedProjection(params, graph, projection, dimestimate);
+    if (returnValue)
+        goto ON_EXIT;
 
     mergeprojectiontime = StopTheClock();
     if (!outputOnFile) {
@@ -590,27 +680,37 @@ int main(int argc, char **argv) {
         cout << "Time (seconds) required by merge Raster projection: " << mergeprojectiontime << endl;
     }
 
-    /*** Each peer update dimestimate***/
+    /*** Each peer compute dimestimate from its average***/
     for(int peerID = 0; peerID < params.peers; peerID++) {
-        dimestimate[peerID] = round(1 / dimestimate[peerID]);
+        returnValue = restoreDimestimate(dimestimate[peerID]);
+        if (returnValue)
+            goto  ON_EXIT;
     }
     /*** Each peer restore tiles cardinality***/
     for(int peerID = 0; peerID < params.peers; peerID++){
-        restoreCardinality(projection[peerID], dimestimate[peerID]);
+        returnValue = restoreCardinality(projection[peerID], dimestimate[peerID]);
+        if (returnValue)
+            goto  ON_EXIT;
     }
 
     /*** Each peer remove tiles < threshold ***/
     for(int peerID = 0; peerID < params.peers; peerID++){
-        projectionThreshold(projection[peerID], params.threshold);
+        returnValue = projectionThreshold(projection[peerID], params.threshold);
+        if (returnValue)
+            goto  ON_EXIT;
     }
 
     if (params.typeAlgorithm == 0) {
         squareProjection = new (nothrow) hashmap[params.peers];
-        if (!squareProjection)
-            return memoryError(__FUNCTION__);
+        if (!squareProjection) {
+            returnValue = memoryError(__FUNCTION__);
+            goto ON_EXIT;
+        }
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
-            getSquareProjection(params.minSquares, projection[peerID], dimestimate[peerID], squareProjection[peerID], peerID);
+            returnValue = getSquareProjection(params.minSquares, projection[peerID], dimestimate[peerID], squareProjection[peerID], peerID);
+            if (returnValue)
+                goto  ON_EXIT;
         }
 
         if (!outputOnFile) {
@@ -621,17 +721,25 @@ int main(int argc, char **argv) {
         /***Each peer clustering its own tiles and compute centroids of clusters***/
 
         clusters3 = new (nothrow) vectorSet3[params.peers];
-        if (!clusters3)
-            return memoryError(__FUNCTION__);
+        if (!clusters3){
+            returnValue = memoryError(__FUNCTION__);
+            goto ON_EXIT;
+        }
 
         centroids = new (nothrow) vector<array<int, 2>>[params.peers];
-        if (!centroids)
-            return memoryError(__FUNCTION__);
+        if (!centroids){
+            returnValue = memoryError(__FUNCTION__);
+            goto ON_EXIT;
+        }
 
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
-            clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
-            getCentroids(clusters3[peerID], centroids[peerID]);
+            returnValue = clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
+            if (returnValue)
+                goto  ON_EXIT;
+            returnValue = getCentroids(clusters3[peerID], centroids[peerID]);
+            if (returnValue)
+                goto  ON_EXIT;
         }
 
         delete[] projection, projection = nullptr;
@@ -644,7 +752,9 @@ int main(int argc, char **argv) {
         }
         StartTheClock();
 
-        distributedCluster(params, clusters3, graph, centroids);
+        returnValue = distributedCluster(params, clusters3, graph, centroids);
+        if (returnValue)
+            goto ON_EXIT;
 
         double mergeclustertime = StopTheClock();
         if (!outputOnFile) {
@@ -655,20 +765,21 @@ int main(int argc, char **argv) {
         /*** Print info about each peer's clusters***/
         for(int peerID = 0; peerID < params.peers; peerID++) {
             cout << "\npeer: " << peerID << endl;
-            printClusters(clusters3[peerID], peerID);
+            returnValue = printClusters(clusters3[peerID], peerID);
+            if (returnValue)
+                goto ON_EXIT;
         }
         cout << "\n\n";
 
-        hashmapUnset all_points;
-        hashmap proj;
-        mapToTilesPrime(dataset, params.precision, params.threshold, ni, proj, all_points);
-        printAllPointsClustered(clusters3[0], all_points);
+
 
     } else {
 
         clusters2 = new (nothrow) vectorSet2[params.peers];
-        if (!clusters2)
-            return memoryError(__FUNCTION__);
+        if (!clusters2){
+            returnValue = memoryError(__FUNCTION__);
+            goto ON_EXIT;
+        }
 
         if (!outputOnFile) {
             cout <<"\nEach peer clustering the global projection..." << endl;
@@ -677,8 +788,11 @@ int main(int argc, char **argv) {
         StartTheClock();
 
         for(int peerID = 0; peerID < params.peers; peerID++){
-            clusteringTiles(projection[peerID], params.min_size, clusters2[peerID]);
+            returnValue = clusteringTiles(projection[peerID], params.min_size, clusters2[peerID]);
+            if (returnValue)
+                goto ON_EXIT;
         }
+        delete[] projection, projection = nullptr;
 
         double clustertime = StopTheClock();
         if (!outputOnFile) {
@@ -693,16 +807,20 @@ int main(int argc, char **argv) {
         }
         cout << "\n\n";
 
-        hashmapUnset all_points;
-        hashmap proj;
-        mapToTilesPrime(dataset, params.precision, params.threshold, ni, proj, all_points);
-        printAllPointsClustered(clusters2[0], all_points);
+
     }
+
+    /// Print some cluster statistics
+    returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, ni, proj, all_points);
+    if (returnValue)
+        goto ON_EXIT;
+    returnValue = printAllPointsClustered(clusters3[0], all_points);
+    if (returnValue)
+        goto ON_EXIT;
 
     returnValue = 0;
 
     ON_EXIT:
-
     if (clusters2 != nullptr)
         delete[] clusters2, clusters2 = nullptr;
 
@@ -1064,15 +1182,19 @@ int average(double *x, double y)  {
 
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni) {
     int row, column;
-    if(getDim(name_file, row, column)) {
-        return fileError(__FUNCTION__);
+    int returnValue = -1;
+
+    returnValue = getDim(name_file, row, column);
+    if (returnValue) {
+        cerr << "Can't read dataset dimension" << endl;
+        return returnValue;
     }
     ni = row;
 
     *dataset_storage = new (nothrow) double[row*column];
-    if (!(*dataset_storage)){
+    if (!(*dataset_storage))
         return memoryError(__FUNCTION__);
-    }
+
 
     *dataset = new (nothrow) double*[row];
     if (!(*dataset)){
@@ -1091,15 +1213,15 @@ int readDataset(double **dataset_storage, double ***dataset, string name_file, i
             return memoryError(__FUNCTION__);
         }
     }
-
-    if(loadData(*dataset, name_file, column)) {
+    returnValue = loadData(*dataset, name_file, column);
+    if(returnValue) {
+        cerr << "Can't load dataset" << endl;
         delete[] *dataset_storage, *dataset_storage = nullptr;
         for (int i = 0; i < row; i++) {
             delete[] (*dataset)[i], (*dataset)[i] = nullptr;
         }
         delete[] *dataset, *dataset = nullptr;
-
-        return fileError(__FUNCTION__);
+        return returnValue;
     }
 
 
@@ -1167,20 +1289,23 @@ void usage(char* cmd)
 int generateGeometricGraph(igraph_t &G_graph, igraph_integer_t n, igraph_real_t radius)
 {
     igraph_bool_t connected;
+    int returnValue;
 
     // generate a connected random graph using the geometric model
-    if (igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr))
+    returnValue = igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
+    if (returnValue)
         return graphError(__FUNCTION__);
 
     igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&G_graph);
-        igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
+        returnValue = igraph_grg_game(&G_graph, n, radius, 0, nullptr, nullptr);
+        if (returnValue)
+            return graphError(__FUNCTION__);
 
         igraph_is_connected(&G_graph, &connected, IGRAPH_WEAK);
     }
-
-    return 0;
+    return returnValue;
 }
 
 int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_real_t power, igraph_integer_t m, igraph_real_t A)
@@ -1193,9 +1318,10 @@ int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_r
 
 
     igraph_bool_t connected;
+    int returnValue;
 
     // generate a connected random graph using the Barabasi-Albert model
-    if (igraph_barabasi_game(/* graph=    */ &BA_graph,
+    returnValue = igraph_barabasi_game(/* graph=    */ &BA_graph,
                 /* n=        */ n,
                 /* power=    */ power,
                 /* m=        */ m,
@@ -1204,14 +1330,15 @@ int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_r
                 /* A=        */ A,
                 /* directed= */ IGRAPH_UNDIRECTED,
                 /* algo=     */ IGRAPH_BARABASI_PSUMTREE,
-                /* start_from= */ 0))
+                /* start_from= */ 0);
+    if (returnValue)
         return graphError(__FUNCTION__);
 
 
     igraph_is_connected(&BA_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&BA_graph);
-        if (igraph_barabasi_game(/* graph=    */ &BA_graph,
+        returnValue = igraph_barabasi_game(/* graph=    */ &BA_graph,
                 /* n=        */ n,
                 /* power=    */ power,
                 /* m=        */ m,
@@ -1220,13 +1347,14 @@ int generateBarabasiAlbertGraph(igraph_t &BA_graph, igraph_integer_t n, igraph_r
                 /* A=        */ A,
                 /* directed= */ IGRAPH_UNDIRECTED,
                 /* algo=     */ IGRAPH_BARABASI_PSUMTREE,
-                /* start_from= */ 0))
+                /* start_from= */ 0);
+        if (returnValue)
             return graphError(__FUNCTION__);
 
         igraph_is_connected(&BA_graph, &connected, IGRAPH_WEAK);
     }
 
-    return 0;
+    return returnValue;
 }
 
 int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos_renyi_t type, igraph_real_t param)
@@ -1237,21 +1365,24 @@ int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos
 
 
     igraph_bool_t connected;
+    int returnValue;
 
     // generate a connected random graph using the Erdos-Renyi model
-    if (igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS))
+    returnValue = igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS);
+    if (returnValue)
         return graphError(__FUNCTION__);
 
     igraph_is_connected(&ER_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&ER_graph);
-        if (igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS))
+        returnValue = igraph_erdos_renyi_game(&ER_graph, type, n, param, IGRAPH_UNDIRECTED, IGRAPH_NO_LOOPS);
+        if (returnValue)
             return graphError(__FUNCTION__);
 
         igraph_is_connected(&ER_graph, &connected, IGRAPH_WEAK);
     }
 
-    return 0;
+    return returnValue;
 }
 
 int generateRegularGraph(igraph_t &R_graph, igraph_integer_t n, igraph_integer_t k)
@@ -1260,50 +1391,51 @@ int generateRegularGraph(igraph_t &R_graph, igraph_integer_t n, igraph_integer_t
     // k = The degree of each vertex in an undirected graph. For undirected graphs, at least one of k and the number of vertices must be even.
 
     igraph_bool_t connected;
+    int returnValue;
 
     // generate a connected regular random graph
-    if (igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0))
+    returnValue = igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0);
+    if (returnValue)
         return graphError(__FUNCTION__);
 
     igraph_is_connected(&R_graph, &connected, IGRAPH_WEAK);
     while(!connected){
         igraph_destroy(&R_graph);
-        if (igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0))
+        returnValue = igraph_k_regular_game(&R_graph, n, k, IGRAPH_UNDIRECTED, 0);
+        if (returnValue)
             return graphError(__FUNCTION__);
 
         igraph_is_connected(&R_graph, &connected, IGRAPH_WEAK);
     }
 
-    return 0;
+    return returnValue;
 }
 
 int generateRandomGraph(igraph_t &random_graph, int type, int n)
 {
+    int returnValue = -12;
 
     switch (type) {
         case 1:
-            if (generateGeometricGraph(random_graph, n, sqrt(100.0/(float)n)))
-                return graphError(__FUNCTION__);
+            returnValue = generateGeometricGraph(random_graph, n, sqrt(100.0/(float)n));
             break;
         case 2:
-            if (generateBarabasiAlbertGraph(random_graph, n, 1.0, 5, 1.0))
-                return graphError(__FUNCTION__);
+            returnValue = generateBarabasiAlbertGraph(random_graph, n, 1.0, 5, 1.0);
             break;
         case 3:
-            if (generateErdosRenyiGraph(random_graph, n, IGRAPH_ERDOS_RENYI_GNP, 10.0/(float)n))
-                return graphError(__FUNCTION__);
+            returnValue = generateErdosRenyiGraph(random_graph, n, IGRAPH_ERDOS_RENYI_GNP, 10.0/(float)n);
             // random_graph = generateErdosRenyiGraph(n, IGRAPH_ERDOS_RENYI_GNM, ceil(n^2/3));
             break;
         case 4:
-            if (generateRegularGraph(random_graph, n, n-1))
-                return graphError(__FUNCTION__);
+            returnValue = generateRegularGraph(random_graph, n, n-1);
             break;
 
         default:
-            return graphError(__FUNCTION__);
+            cerr << "Graph choose not exists" << endl;
+            return returnValue;
     }
 
-    return 0;
+    return returnValue;
 
 }
 
@@ -1348,6 +1480,7 @@ void parametersSummary(Params params) {
 }
 
 int generateGraph(igraph_t &graph, int peers, int graphType) {
+    int returnValue = -12;
     // turn on attribute handling in igraph
     igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -1355,10 +1488,13 @@ int generateGraph(igraph_t &graph, int peers, int graphType) {
     igraph_rng_seed(igraph_rng_default(), 42);
 
     // generate a connected random graph
-    if (generateRandomGraph(graph, graphType, peers))
-        return graphError(__FUNCTION__);
+    returnValue = generateRandomGraph(graph, graphType, peers);
+    if (returnValue)
+        return returnValue;
 
-    return 0;
+
+
+    return returnValue;
 }
 
 int graphProperties(igraph_t &graph) {
@@ -1897,3 +2033,11 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     return returnValue;
 }
 
+int restoreDimestimate(double &dimestimate) {
+    if (!dimestimate) {
+        cerr << "Dimestimate can't be 0" << endl;
+        return -40;
+    } else
+        dimestimate = round(1/dimestimate);
+    return 0;
+}

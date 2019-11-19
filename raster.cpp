@@ -37,6 +37,7 @@ int getDim(string name_file, int &row, int &column) {
     if (!inputFile.eof()) {
         return fileError(__FUNCTION__);
     }
+    inputFile.close();
     return 0;
 }
 
@@ -59,7 +60,8 @@ int loadData(double **m, string name_file, int column) {
                     catch (const std::invalid_argument &e) {
                         cerr << "NaN found in file " << name_file << " line " << row
                              << endl;
-                        return -2;
+                        inputFile.close();
+                        return arithmeticError(__FUNCTION__);
                     }
                 }
             }
@@ -67,10 +69,8 @@ int loadData(double **m, string name_file, int column) {
         row++;
     }
     if (!inputFile.eof()) {
-        string a = __FUNCTION__;
         return fileError(__FUNCTION__);
     }
-
     inputFile.close();
     return 0;
 }
@@ -229,6 +229,10 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
 }
 
 int projectionThreshold(hashmap &projection, int threshold) {
+    if (projection.size() <= 0) {
+        cerr << "Bad projection data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
     hashmap::iterator it;
     it = projection.begin();
     while(it != projection.end()) {

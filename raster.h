@@ -87,7 +87,7 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
  * @param [in] name_file - The input file name
  * @param [in,out] row - Number of csv rows
  * @param [in,out] column - Number of csv columns
- * @return Return 0 if success, -1 in case of read file error
+ * @return Return 0 if success, -7 in case of read file error
  */
 int getDim(string name_file, int &row, int &column);
 
@@ -98,7 +98,7 @@ int getDim(string name_file, int &row, int &column);
  * @param [in,out] m - Matrix where load dataset
  * @param [in] name_file - Name of dataset file
  * @param [in] column - Number of file column
- * @return Return 0 if success, -1 in case of read file error, -2 in case of read NaN
+ * @return Return 0 if success, -7 in case of read file error, -4 in case of read NaN
  */
 int loadData(double **m, string name_file, int column);
 
@@ -137,7 +137,7 @@ int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &p
  * @param [in,out] projection - Data structure where save the projection result of raster algorithm
  * @param [in] start - First point in the dataset of peer
  * @param [in] end - Last point in the dataset of peer
- * @return 0 in case of success, -1 in case of insert error
+ * @return 0 in case of success, -2 in case of insert error
  */
 int mapToTiles(double **m, double precision, hashmap &projection, int start, int end);
 
@@ -163,7 +163,7 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
  *
  * @param [in,out] projection - Data structure with all tiles
  * @param [in] threshold - Parameter for raster algorithm (all tiles with cardinality < threshold are delete)
- * @return 0 if success
+ * @return 0 if success, -3 in case of bad projection structure
  */
 int projectionThreshold(hashmap &projection, int threshold);
 

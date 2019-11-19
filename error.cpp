@@ -110,5 +110,15 @@ int graphError(string nameFunction) {
     return -12;
 }
 
+/**
+ *
+ * @param [in] nameFunction - Name of the calling function
+ * @return -99
+ */
+int argumentsError(string nameFunction) {
+    cerr << nameFunction << ": Read arguments error" << endl;
+    return -99;
+}
+
 
 

@@ -11,6 +11,10 @@
 #include <random>
 #include "raster.h"
 #include "error.h"
+#include "boost/program_options.hpp"
+#include "boost/filesystem.hpp"
+
+namespace po = boost::program_options;
 
 /*** Default Parameters ***/
 const int           DEFAULT_PEERS = 10; // number of peers
@@ -389,17 +393,15 @@ int getSquareProjection(int minSquares, hashmap &projection, double dimestimate,
 
 
 /**
- * This function update params structure with input
- * inserted by command line
+ * This function use Boos library in order to handler
+ * argument passed by command line
  *
  * @param [in] argc - Count of command line arguments
  * @param [in] argv - Contains command line arguments
  * @param [in,out] params - Structure with default params
- * @return 0 if success
+ * @return 0 in case of success, -99 n case of arguments error
  */
-int getParameters(int argc, char** argv, Params &params);
-
-
+int handleArgument(int argc, char **argv, Params &params);
 /**
  * This function initialize params with default value
  *
@@ -458,13 +460,6 @@ void StartTheClock();
  * @return
  */
 double StopTheClock();
-
-
-/**
- * Print on terminal the input parameter accepted
- * @param cmd - Name of script
- */
-void usage(char* cmd);
 
 
 /**
@@ -548,6 +543,8 @@ using namespace std::chrono;
 void parametersSummary(Params params);
 
 high_resolution_clock::time_point t1, t2;
+
+
 /**
  *
  * @param argc
@@ -582,7 +579,10 @@ int main(int argc, char **argv) {
 
     /** assign parameters read from command line */
     initParams(params);
-    getParameters(argc, argv, params);
+    returnValue = handleArgument(argc, argv, params);
+    if (returnValue)
+        return returnValue;
+
 
     outputOnFile = !params.outputFilename.empty();
 
@@ -1269,23 +1269,6 @@ double StopTheClock() {
     return time_span.count();
 }
 
-void usage(char* cmd)
-{
-    std::cerr
-            << "Usage: " << cmd << "\n"
-            << "  -ni   number of items\n"
-            << "  -p    number of peers\n"
-            << "  -f    fan-out of peers\n"
-            << "  -d    graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular\n"
-            << "  -ct   convergence tolerance\n"
-            << "  -cl   number of consecutive rounds in which convergence must be satisfied\n"
-            << "  -of   output filename, if specified a file with this name containing all of the peers stats is written\n"
-            << "  -pr   number of precision for raster\n"
-            << "  -thr  number of threshold for raster\n"
-            << "  -ms   number of min size for raster\n"
-            << "  -dt   file name containing dataset\n\n";
-}
-
 int generateGeometricGraph(igraph_t &G_graph, igraph_integer_t n, igraph_real_t radius)
 {
     igraph_bool_t connected;
@@ -1717,92 +1700,109 @@ int getSquareProjection(int minSquares, hashmap &projection, double dimestimate,
 
 }
 
-int getParameters(int argc, char **argv, Params &params) {
-    /*** parse command-line parameters ***/
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-p") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of peers parameter." << endl;
-                return -1;
+int handleArgument(int argc, char **argv, Params &params) {
+    po::options_description desc("Options");
+    try
+    {
+        std::vector<std::string> sentence;
+
+        /** Define and parse the program options
+         */
+        namespace po = boost::program_options;
+
+        desc.add_options()
+                ("help", "produce help message")
+                (",p",po::value<int>(), "number of peers")
+                (",f", po::value<int>(),"fan-out of peers")
+                (",d",po::value<int>(), "graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular")
+                ("ct",po::value<double >(), "convergence tolerance")
+                ("cl",po::value<int>(), "number of consecutive rounds in which convergence must be satisfied")
+                (",o",po::value<string>(), "output filename, if specified a file with this name containing all of the peers stats is written")
+                (",r",po::value<int>(), "number of communication rounds")
+                ("pr",po::value<double>(), "number of precision for raster")
+                ("thr",po::value<int>(), "umber of threshold for raster")
+                ("maxdist",po::value<int>(), "max manhattann distance")
+                ("minsize",po::value<int>(), "number of min size for raster")
+                ("minsquare",po::value<int>(), "file name containing dataset")
+                (",i",po::value<string>(), "file name containing dataset")
+                (",t",po::value<int>(), "type of algorithm");
+
+
+        po::variables_map vm;
+
+        try
+        {
+            po::store(po::parse_command_line(argc, argv, desc), vm); // throws on error
+
+            /** --help option
+             */
+            if ( vm.count("help")  )
+            {
+                cerr << desc << endl;
+                cerr.flush();
+                return argumentsError(__FUNCTION__);
             }
-            params.peers = stoi(argv[i]);
-        }  else if (strcmp(argv[i], "-f") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing fan-out parameter." << endl;
-                return -1;
-            }
-            params.fanOut = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-d") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing graph type parameter" << endl;
-                return -1;
-            }
-            params.graphType = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-ct") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing convergence tolerance parameter." << endl;
-                return -1;
-            }
-            params.convThreshold = stod(argv[i]);
-        } else if (strcmp(argv[i], "-cl") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing # of consecutive rounds in which convergence is satisfied parameter." << endl;
-                return -1;
-            }
-            params.convLimit = stol(argv[i]);
-        } else if (strcmp(argv[i], "-of") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing filename for simulation output." << endl;
-                return -1;
-            }
-            params.outputFilename = string(argv[i]);
-        } else if (strcmp(argv[i], "-r") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of rounds to execute.\n";
-                return -1;
-            }
-            params.roundsToExecute = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-pr") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of precision for raster.\n";
-                return -1;
-            }
-            params.precision = stod(argv[i]);
-        } else if (strcmp(argv[i], "-thr") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of threshold for raster.\n";
-                return -1;
-            }
-            params.threshold = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-ms") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing number of min size for raster.\n";
-                return -1;
-            }
-            params.min_size = stoi(argv[i]);
-        } else if (strcmp(argv[i], "-dt") == 0) {
-            i++;
-            if (i >= argc) {
-                cerr << "Missing file name of dataset.\n";
-                return -1;
-            }
-            params.name_file = argv[i];
-        } else {
-            usage(argv[0]);
-            return -1;
+
+            po::notify(vm); /// throws on error, so do after help in case there are any problems
+
+        } catch(boost::program_options::error& e) { /// in case of unrecognised options
+            cerr << "ERROR: " << e.what() << std::endl << std::endl;
+            cerr << desc << endl;
+            cerr.flush();
+            return argumentsError(__FUNCTION__);
         }
+
+        if ( vm.count("-p") )
+            params.peers = vm["-p"].as<int>();
+
+        if ( vm.count("-f") )
+            params.fanOut = vm["-f"].as<int>();
+
+        if ( vm.count("-d") )
+            params.graphType = vm["-d"].as<int>();
+
+        if ( vm.count("-o") )
+            params.outputFilename = vm["-o"].as<string>();
+
+        if ( vm.count("-r") )
+            params.roundsToExecute = vm["-r"].as<int>();
+
+        if ( vm.count("-i") )
+            params.name_file = vm["-i"].as<string>();
+
+        if ( vm.count("-t") )
+            params.typeAlgorithm = vm["-t"].as<int>();
+
+        if ( vm.count("ct") )
+            params.convThreshold = vm["ct"].as<double>();
+
+        if ( vm.count("cl") )
+            params.convLimit = vm["cl"].as<int>();
+
+        if ( vm.count("pr") )
+            params.precision = vm["pr"].as<double>();
+
+        if ( vm.count("thr") )
+            params.threshold = vm["thr"].as<int>();
+
+        if ( vm.count("maxdist") )
+            params.maxDistance = vm["maxdist"].as<int>();
+
+        if ( vm.count("minsize") )
+            params.min_size = vm["minsize"].as<int>();
+
+        if ( vm.count("minsquare") )
+            params.minSquares = vm["minsquare"].as<int>();
+
+
+    } catch(std::exception& e) {
+        cerr <<"ERROR: " << e.what() << endl;
+        return argumentsError(__FUNCTION__);
     }
+
+
     return 0;
+
 }
 
 int initParams(Params &params) {

@@ -618,4 +618,3 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
 
     return returnValue;
 }
-

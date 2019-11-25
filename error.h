@@ -20,6 +20,8 @@ int dataError(string nameFunction);
 int arithmeticError(string nameFunction);
 int mergeError(string nameFunction);
 int graphError(string nameFunction);
-int argumentsError(string nameFunction);
+int functionError(string nameFunction);
+int argumentError(string nameFunction);
+
 
 #endif //P2PRASTER_ERROR_H

@@ -6,21 +6,20 @@
  */
 
 #include <iostream>
-#include <igraph/igraph.h>
+#include "igraph/igraph.h"
 #include <cstring>
 #include <random>
 #include "raster.h"
 #include "error.h"
 #include "boost/program_options.hpp"
-#include "boost/filesystem.hpp"
 
 namespace po = boost::program_options;
 
 /*** Default Parameters ***/
-const int           DEFAULT_PEERS = 10; // number of peers
+const int           DEFAULT_PEERS = 100; // number of peers
 const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
-const double        DEFAULT_CONVTHRESHOLD = 0.0001; // local convergence tolerance
+const double        DEFAULT_CONVTHRESHOLD = 0.001; // local convergence tolerance
 const int           DEFAULT_CONVLIMIT = 3; // number of consecutive rounds in which a peer must locally converge
 const int           DEFAULT_ROUNDSTOEXECUTE = -1;
 const double        DEFAULT_PRECISION = -4.2;
@@ -28,35 +27,36 @@ const int           DEFAULT_THRESHOLD = 2;
 const int           DEFAULT_MIN_SIZE = 3;
 const int           DEFAULT_RADIUS = 0;
 const int           DEFAULT_MAXDISTANCE = 2;
-const int           DEFAULT_TYPEALGORITHM = 0;
+const int           DEFAULT_TYPEALGORITHM = 1;
 const int           DEFAULT_MINSQUARES = 1;
+//const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
 const string        DEFAULT_OUTPUTFILENAME;
 
-/*!< @struct Params - A structure containing parameters read from command-line.  */
+/*!< @struct Params - A structure containing parameters read from the command-line.  */
 struct Params {
     int         peers;             /*!< The number of peers */
-    string      outputFilename;    /*!< The path for the output file */
+    string      outputFilename;    /*!< The pathname of the output file */
     double      convThreshold;     /*!< The local convergence tolerance for the consensus algorithm */
     int         convLimit;         /*!< The number of consecutive rounds in which a peer must locally converge */
     int         graphType;         /*!< The graph distribution: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique) */
     int         radius;            /*!< Parameter for graph generation */
-    int         fanOut;            /*!< The number of communication that a peer can carry out in a round (-1 ability communication with all neighbors) */
-    int         roundsToExecute;   /*!< The number of rounds to carry out in the consensus algorithm */
-    double      precision;         /*!< Raster parameters that determines tile dimension */
-    int         threshold;         /*!< Raster parameters that establish if maintain or not a tile */
-    int         min_size;          /*!< Raster parameters that establish the minimum number of tile in order to form a cluster */
+    int         fanOut;            /*!< The number of communications that a peer can carry out in a round (-1 communication enabled with all neighbors) */
+    int         roundsToExecute;   /*!< The number of rounds to be carried out in the consensus algorithm */
+    double      precision;         /*!< Raster parameter that determines the tile dimension */
+    int         threshold;         /*!< Raster parameter that determines if a tile should be retained or not */
+    int         min_size;          /*!< Raster parameter that determines the minimum number of tiles required to form a cluster */
     int         maxDistance;       /*!< Max distance in order to consider two cluster the same */
     int         minSquares;        /*!< minimum squares for each peer from checkerboard partition*/
     string      name_file;         /*!< The path for the input CSV file */
-    int         typeAlgorithm;     /*!< 0 if want to make cluster in distributed manner, otherwise each peer after first communication clustering all global projection */
+    int         typeAlgorithm;     /*!< 0 for distributed clustering algorithm, otherwise each peer determines the global projection which is then used for local clustering*/
 };
 
 
 /**
- * minX is the min coordinate value on x axis, maxX the maximum
- * miny is the min coordinate value on y axis, maxy the maximum
- * Together these values define the domain where tile are distributed
+ * minX is the min coordinate value on the x axis, maxX the maximum
+ * miny is the min coordinate value on the y axis, maxy the maximum
+ * Together these values define the tiles' domain
  */
 struct MinMax {
     int         minX;
@@ -66,19 +66,23 @@ struct MinMax {
 };
 
 /**
- * Struct taht contains how much tiles group in x and y axis and eventual rest of grouping
+ * Struct related to a tile group:
+ * nTilesX is the number of tiles (in a group) on the x axis
+ * nTilesY is the number of tiles (in a group) on the y axis
+ * restTilesX is the remaining number of tiles on the x axis
+ * restTilesY is the remaining number of tiles on the y axis
  */
 struct TilesGroup {
-    int nTilesY;
     int nTilesX;
-    int restTilesY;
+    int nTilesY;
     int restTilesX;
+    int restTilesY;
 };
 
 
 /**
- * (x1,y1) is the top-right corner coordinate of a square in checkerboard partition
- * (x2,y2) is the bottom-left corner coordinate of a square in checkerboard partition
+ * (x1,y1) is the top-right corner coordinate of a square in the checkerboard partition
+ * (x2,y2) is the bottom-left corner coordinate of a square in the checkerboard partition
  */
 struct Coordinates {
     int         x1;
@@ -89,7 +93,7 @@ struct Coordinates {
 
 
 /**
- * Dimension of grid p x q for checkerboard partition
+ * Dimension of grid (p x q) for checkerboard partition
  */
 struct Grid {
     int p;
@@ -98,52 +102,52 @@ struct Grid {
 
 
 /**
- * This function compute the Manhattan distance between two points p1,p2
+ * This function computes the Manhattan distance between two points p1,p2
  * with coordinate (x1,y1) and (x2,y2):
  * L1(p1,p2) = |x1-x2| + |y1-y2|
  *
- * @param [in] x1 - Coordinate x of P1
- * @param [in] x2 - Coordinate x of P2
- * @param [in] y1 - Coordinate y of P1
- * @param [in] y2 - Coordinate y of P2
+ * @param [in] x1 - x coordinate of P1
+ * @param [in] x2 - x coordinate of P2
+ * @param [in] y1 - y coordinate of P1
+ * @param [in] y2 - y coordinate of P2
  * @return Return Manhattan Distance
  */
 int manhattanDistance(int x1, int x2, int y1, int y2);
 
 
 /**
- * This function compute the centroids for each clusters using a weighted average.
- * Save into centroids[i] the centroid of clusters[i] (for each cluster in clusters)
+ * This function computes the centroids of each cluster using a weighted average.
+ * It Stores into centroids[i] the centroid of clusters[i] (for each cluster in clusters)
  *
  * @param [in] clusters - Data structure which contains clusters
- * @param [in,out] centroids - Data structure where insert centroid of respectively cluster
- * @return 0 if success, -3 in case of bad data structures,
+ * @param [in,out] centroids - Data structure where the centroids are stored
+ * @return 0 if success, -3 in case of bad data structures
  */
 int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids);
 
 
 /**
- * This function get cluster from peer and its neighbor and do the union.
- * As result we obtain an only cluster that contains all the clusters that
+ * This function retrieves the clusters from both a peer and its neighbor and does the union.
+ * As a result, we obtain one cluster that contains all the clusters that
  * are in peer cluster but not in neighbor cluster (and viceversa) and only
- * one copy if a cluster is in both peer and neighbor clusters.
- * Coordinate of centroids is used to establishing if two clusters
+ * one copy if a cluster is in both the peer and neighbor clusters.
+ * Coordinates of centroids are used to establish if two clusters
  * are the same or not
  *
  * @param [in,out] clustersN - Data structure which contains clusters of peer's neighbor
  * @param [in,out] clustersP - Data structure which contains clusters of peer
  * @param [in,out] centroidsN - Data structure which contains centroids of peer's neighbor
  * @param [in,out] centroidsP - Data structure which contains centroids of peer
- * @param [in] maxDistance - Max distance to consider two cluster similar
+ * @param [in] maxDistance - Max distance to consider two clusters similar
  * @return 0 if success, -1 in case of memory error, -25 in case of cluster union error
  */
 int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance);
 
 
 /**
- * This function merge two cluster that are similar but not equal,
- * it add the tiles that are in common or compute the average for
- * tiles that have the same coordinate but different cardinality
+ * This function merges two clusters that are similar but not equal,
+ * it adds the tiles that are in common or compute the average for
+ * tiles with the same coordinates but different cardinality
  *
  * @param [in,out] clusterN - Data structure which contains cluster of peer's neighbor
  * @param [in,out] clusterP - Data structure which contains cluster of peer
@@ -156,48 +160,48 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP);
  * This function implements the simultaneous Max and Min algorithm on both x and y axes
  *
  * @param [in] projection - Data structure with tiles
- * @param [in,out] maxX - Where save max value for tile x coordinates
- * @param [in,out] minX - Where save min value for tile x coordinates
- * @param [in,out] maxY - Where save max value for tile y coordinates
- * @param [in,out] minY - Where save min value for tile y coordinates
+ * @param [in,out] maxX - Where max value for tile x coordinate is stored
+ * @param [in,out] minX - Where min value for tile x coordinate is stored
+ * @param [in,out] maxY - Where max value for tile y coordinate is stored
+ * @param [in,out] minY - Where min value for tile y coordinate is stored
  * @return 0 if success, -3 in case of bad data structure
  */
 int simultaneousMaxMin(hashmap &projection, MinMax &minMax);
 
 
 /**
- * This function compute the parameter p and q to obtain a checkerboard partition (with grid p x q)
+ * This function computes the parameter p and q to obtain a checkerboard partition (with grid p x q)
  * of the global projection and guarantees that each peer has at least min "square".
  *
  *
  * @param [in,out] p - How many squares on x axis
  * @param [in,out] q - How many squares on y axis
  * @param [in] peers - Number of peers in the network
- * @param [in] min - Min square for each peer
+ * @param [in] min - Min number of squares for each peer
  * @return 0 if success, -4 in case of arithmetic error
  */
 int getGridSize(Grid &grid, int peers, int min);
 
 
 /**
- * This function merge the tiles of two structures. If a tile is common,
- * it compute the average on the cardinality of each tile and update the value on both structure.
- * If a tiles is present in an only structure, it value is divides by 2 and the tile
- * is copies also in the other structure.
+ * This function merges the tiles of two structures. If a tile is in common,
+ * it computes the average on the cardinality of each tile and updates the value of both structure.
+ * If a tile is present in only one of the structures, its value is divided by 2 and the tile
+ * is stored also in the other structure.
  *
  * @param projectionN - Data structure with peer neighbor tiles
- * @param projectionP - Data structure with  peer tiles
+ * @param projectionP - Data structure with peer tiles
  * @return 0 if success, -2 in case of insert error, -3 in case of bad data structure
  */
 int projectionMerge(hashmap &projectionN, hashmap &projectionP);
 
 
 /**
- * This function compute the average between two double.
- * The result is stored into x variable. If y is null the function
- * simply return x/2, otherwise return the average.
+ * This function computes the average between two double values.
+ * The result is stored into the x variable. If y is null the function
+ * simply returns x/2, otherwise it returns the average.
  *
- * @param x - First number that will be update
+ * @param x - First number that will be updated
  * @param y - Second number
  * @return 0 if success, -4 if x is invalid
  */
@@ -205,47 +209,46 @@ int average(double *x, double y);
 
 
 /**
- * This function not use goto method because we don't want
- * to deallocate dataset and dataset_storage at the end
- * of the function because they will be used by main
+ * In this function we do not deallocate dataset and dataset_storage at the end
+ * of the function because these variables will be used by main()
  *
- * @param [in] dataset_storage - Array where store all dataset
- * @param [in] dataset - Array of pointer that pints at dataset_storage
+ * @param [in] dataset_storage - Array where the dataset will be stored
+ * @param [in] dataset - Array of pointers (pointing to dataset_storage cells)
  * @param [in] name_file - Name input file
- * @param [in,out] ni - Nu,ber of points
+ * @param [in,out] ni - Number of points
  * @return 0 if success, -1 in case of memory error, -7 in case of input file error, -4 in case of NaN
  */
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni);
 
 
 /**
- * This function compute the last item of the dataset for each peer.
- * Peer with i will obtain all data from peerLastItem[i-1] and peerLastItem[i]
+ * This function computes the last item of the dataset for each peer.
+ * Peer i will obtain all data from peerLastItem[i-1] and peerLastItem[i]
  *
- * @param [in,out] peerLastItem - Data structure where save the result
+ * @param [in,out] peerLastItem - Data structure where the result will be stored
  * @param [in] peers - Number of peers
- * @param [in] ni - NUmber of points into dataset
+ * @param [in] ni - NUmber of points in the dataset
  * @return 0 if success
  */
 int partitionDataset(long *peerLastItem, int peers, int ni);
 
 
 /**
- * This function check if dataset partition is correct
+ * This function checks if a dataset partition is correct
  *
  * @param peerLastItem - Data structure
  * @param [in] peers - Number of peers
- * @param [in] ni - NUmber of points into dataset
+ * @param [in] ni - NUmber of points in the dataset
  * @return 0 if success, -9 in case of partition error
  */
 int checkPartitioning(long *peerLastItem, int peers, int ni);
 
 
 /**
- * This function use igraph library in order to created
- * teh selected graph.
+ * This function uses the igraph library in order to create
+ * the selected graph.
  *
- * @param graph - Structure where save graph generated
+ * @param graph - Structure where the generated graph will be stored
  * @param peers - Number of peers
  * @param graphType - Type of graph
  * @return 0 if success, -12 in case of graph error
@@ -254,19 +257,19 @@ int generateGraph(igraph_t &graph, int peers, int graphType);
 
 
 /**
- * This function print on terminal tha minimum and maximum vertex degree
+ * This function prints on terminal the minimum and maximum vertex degrees
  *
- * @param graph - Structure that contains graph
+ * @param graph - Structure that contains the graph
  * @return 0 if success
  */
 int graphProperties(igraph_t &graph);
 
 
 /**
- * This function return the number of neighbor of calling peer,
- * if this fanOut < neighborSize then return fanOut and remove
- * randomly (neighborsSize - fanOut) neighbors from neighbors structure.
- * If fanOut = -1 return neighborsSize.
+ * This function returns the number of neighbors of the calling peer,
+ * if this fanOut < neighborSize then returns fanOut and removes
+ * randomly (neighborsSize - fanOut) neighbors from the neighbors structure.
+ * If fanOut = -1 returns neighborsSize.
  *
  * @param [in] graph
  * @param [in,out] neighbors
@@ -278,74 +281,74 @@ int getNeighborsSize(igraph_t &graph, igraph_vector_t &neighbors, int fanOut);
 
 
 /**
- * This function check if peer reaches convergence, in that case
- * increase convRounds, when convRounds become greater than
- * conLimit than converged is set to true.
- * Convergence is reached when difference between prevestimate
+ * This function checks if a peer has reached the convergence, and in that case
+ * it increases convRounds and when convRounds becomes greater than
+ * conLimit then converged is set to true.
+ * Convergence is reached when the difference between prevestimate
  * and dimestimate is less than convThreshold
  *
  * @param [in] prevestimate -  Number of peers estimated at round k-1
  * @param [in] dimestimate - Number of peers estimated at round k
  * @param [in] convThreshold - Threshold for convergence
  * @param [in,out] convRounds - Number of consecutive rounds needed for a peer to maintain convergence
- * @param [in,out] converged - Parameter that indicate if peer has reach convergence or not
- * @param [in] convLimit - Minimum consecutive rounds number for convergence
+ * @param [in,out] converged - Parameter that indicates if peer has reached or not convergence
+ * @param [in] convLimit - Minimum number of consecutive rounds for convergence
  * @return 0 if success
  */
 int checkFirstConvergence(double prevestimate, double dimestimate, double convThreshold, int &convRounds, bool &converged, int convLimit);
 
 
 /**
- * This function check if peer reaches convergence, in that case
- * increase convRounds, when convRounds become greater than
- * conLimit than converged is set to true.
+ * This function checks if a peer has reached the convergence, in that case
+ * it increases convRounds and when convRounds becomes greater than
+ * conLimit then converged is set to true.
  * Convergence is reached when prevclusterestimate is equal to
  * clusterestimate
  *
  * @param [in] prevclustersestimate - Number of clusters estimated at round k-1
  * @param [in] clustersestimate - Number of clusters estimated at round k
  * @param [in,out] convRounds -  Number of consecutive rounds needed for a peer to maintain convergence
- * @param [in,out] converged - Parameter that indicate if peer has reach convergence or not
- * @param [in] convLimit - Minimum consecutive rounds number for convergence
+ * @param [in,out] converged - Parameter that indicates if peer has reached or not convergence
+ * @param [in] convLimit - Minimum number of consecutive rounds for convergence
  * @return 0 if success
  */
 int checkSecondConvergence(int prevclustersestimate, int clustersestimate, int &convRounds, bool &converged, int convLimit);
 
 
 /**
- * This function iterate over all tiles into projection structure
+ * This function iterates over all tiles into the projection structure
  * in order to restore the real cardinality by multiplying each tile
  * cardinality (that at moment of function calling is an average)
- * for the number of peers that partecipated at communication.
+ * for the number of peers that partecipated in the communication.
  *
  * @param [in,out] projection - Data structure that contains tiles with average cardinality
- * @param [in] dimestimate - Number of peer estimated
+ * @param [in] dimestimate - Number of estimated peers
  * @return 0 if success, -3 in case of bad data structure
  */
 int restoreCardinality(hashmap &projection, int dimestimate);
 
 
 /**
- * This function compute how group tiles on x and y axis
- * in order to form a grid p x q without cut any tile
+ * This function computes how to group tiles on the x and y axes
+ * in order to form a  p x q grid without cutting any tile
  *
  * @param [in,out] tilesGroup - Struct where save how groups tiles
- * @param [in] q - Number of squares on x axis
- * @param [in] p - Number of squares on x axis
+ * @param [in] q - Number of squares on the x axis
+ * @param [in] p - Number of squares on the x axis
  * @param [in] minMax - Coordinates of tile domain
- * @return 0 if success, -4 in case of arithmetic error, -30 if can't group tiles
+ * @return 0 if success, -4 in case of arithmetic error, -30 if tiles can not be grouped
  */
 int getTilesGroup(TilesGroup &tilesGroup, Grid grid, MinMax &minMax);
 
 
 /**
- * This function compute using peerID if calling peer have an extra square
+ * This function computes, using peerID, if the calling peer has an extra square
  *
- * @param [in,out] numberOfSquares - Variable where save result
- * @param [in] peerID - Id calling peer
+ * @param [in,out] numberOfSquares - Variable where the result will be stored
+ * @param [in] peerID - Id of calling peer
  * @param [in] p - Grid size
  * @param [in] q - Grid size
- * @param [in] dimestimate - Number of peers estimate
+ * @param [in] dimestimate - Number of estimate peers
  * @param [in] minSquares - Minimum number of squares that each peer must own
  * @return 0 if success
  */
@@ -354,47 +357,47 @@ int getNumberOfSquares(int &numberOfSquares, int peerID, Grid grid, int dimestim
 
 /**
  *
- * @param [in,out] coordinates - Structure where save coordinates of squares
+ * @param [in,out] coordinates - Structure where coordinates of squares will be stored
  * @param [in] grid - Size of grid for checkerboard partition
- * @param [in] dimestimate - Number of peers estimate
+ * @param [in] dimestimate - Number of estimated peers
  * @param [in] minMax - Coordinates of tile domain
  * @param [in] k - Square number of which we want the coordinates
- * @param [in] peerID - Id of peer calling
+ * @param [in] peerID - Id of calling peer
  * @return 0 if success, -4 in case of arithmetic error, -30 if can't group tiles
  */
 int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, MinMax &minMax, int k, int peerID);
 
 
 /**
- * This function iterate over all tiles into projection, if a tile coordinate
- * is into one of squares, remove it from projection and add to squareProjection
+ * This function iterates over all tiles into the projection, if a tile
+ * is within one of squares, remove it from the projection and add it to squareProjection
  *
- * @param [in] projection - Data structure which contains tiles
- * @param [in,out] squareProjection - Data structure where will save only tiles into peer squares
- * @param [in] coordinates - Structure that contains coordinates of squares
+ * @param [in] projection - Data structure containing the tiles
+ * @param [in,out] squareProjection - Data structure where tiles will be stored
+ * @param [in] coordinates - Structure containing the coordinates of squares
  * @param [in] squares - Number of squares
- * @return 0 if success, -2 in case of isnert error, -3 in case of bad data
+ * @return 0 if success, -2 in case of insert error, -3 in case of bad data
  */
 int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates *coordinates, int squares);
 
 
 /**
- * This function insert into square projection only tiles that are into
+ * This function inserts into square projection only the tiles that are into
  * peer square of checkerboard partition
  *
  * @param [in] minSquares - Minimum number of squares that each peer must own
- * @param [in,out] projection - Data structure which contains tiles
- * @param [in] dimestimate - Number of peers estimate
- * @param [in,out] squareProjection - Data structure where save the tiles that are inside the square
- * @param [in] peerID - Id of peer calling
- * @return 0 if success,-2 in case of insert error, -3 in case of bad data structure, -4 in case of arithmetic error, -30 if can't group tiles
+ * @param [in,out] projection - Data structure containing the tiles
+ * @param [in] dimestimate - Number of estimated peers
+ * @param [in,out] squareProjection - Data structure where the tiles that are inside the square will be stored
+ * @param [in] peerID - Id of calling peer
+ * @return 0 if success,-2 in case of insert error, -3 in case of bad data structure, -4 in case of arithmetic error, -30 if tiles can not be grouped
  */
 int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID);
 
 
 /**
- * This function use Boos library in order to handler
- * argument passed by command line
+ * This function usse the Boost library in order to handle
+ * the arguments passed on the command line
  *
  * @param [in] argc - Count of command line arguments
  * @param [in] argv - Contains command line arguments
@@ -402,10 +405,12 @@ int getSquareProjection(int minSquares, hashmap &projection, double dimestimate,
  * @return 0 in case of success, -99 n case of arguments error
  */
 int handleArgument(int argc, char **argv, Params &params);
+
+
 /**
- * This function initialize params with default value
+ * This function initializes params with default values
  *
- * @param [in,out] params - Empty struct to initialize
+ * @param [in,out] params - Empty struct to be initialized
  * @return 0 if success
  */
 int initParams(Params &params);
@@ -413,14 +418,14 @@ int initParams(Params &params);
 
 /**
  * This function simulates the first run of communication
- * where each peer communicate with fanOut of its neighbor
- * in order to merge information about projection.
+ * where each peer communicates with fanOut of its neighbors
+ * in order to merge information about the projection.
  *
  *
  * @param [in] params - Struct with algorithm parameters
- * @param [in] graph - Struct that contains graph communication
+ * @param [in] graph - Struct that contains the graph topology
  * @param [in,out] projection - Array with all peers local projection
- * @param [in,out] dimestimate - Variable where each peer save its estimate total number of peer in the network
+ * @param [in,out] dimestimate - Variable where each peer stores its local estimate of the total number of peers in the P2P network
  * @return 0 if success, -1 in case of memory error, -2 in case of insert error, -3 in case of bad data structure, -4 in case of arithmetic error
  */
 int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, double *dimestimate);
@@ -428,12 +433,12 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
 
 /**
  * This function simualates the second round of communication
- * where each peer communicate with fanOut of its neighbor
- * in order to merge informatio about clusters
+ * where each peer communicates with fanOut of its neighbors
+ * in order to merge information about the clusters
  *
  * @param [in] params - Struct with algorithm parameters
  * @param [in,out] clusters3 - Array with all peers local clusters
- * @param [in] graph - Struct that contains graph communication
+ * @param [in] graph - Struct that contains the graph topology
  * @param [in,out] centroids - Array with all peers local centroids
  * @return 0 if success, -1 in case of memory error, -25 in case of cluster union error
  */
@@ -441,22 +446,24 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
 
 
 /**
+ * This function obtains dimestimate from its average
+ * simply computing the inverse of dimestimate.
  *
- * @param dimestimate - Average of dimastimate from communication round
- * @return 0 if success, -40 if dimestimate = 0
+ * @param dimestimate - Average dimestimate for the current communication round
+ * @return 0 if success, -40 if dimestimate == 0
  */
 int restoreDimestimate(double &dimestimate);
 
 
 /**
- * When called save the actual time into global variable t1
+ * When called this function stores the actual time into the global variable t1
  */
 void StartTheClock();
 
 
 /**
- * When called save the actual time into gloab variable t2
- * and compute the difference t1-t2
+ * When called this function stores the actual time into the global variable t2
+ * and computes the difference t1-t2
  * @return
  */
 double StopTheClock();
@@ -502,7 +509,7 @@ int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos
 
 
 /**
- * This game generates a directed or undirected random graph where
+ * This function generates a directed or undirected random graph where
  * the degrees of vertices are equal to a predefined constant k.
  * For undirected graphs, at least one of k and the number of vertices
  * must be even.
@@ -512,13 +519,13 @@ int generateErdosRenyiGraph(igraph_t &ER_graph, igraph_integer_t n, igraph_erdos
  * @param [in] k - The degree of each vertex in an undirected graph, or the out-degree and in-degree of each vertex in a directed graph
  * @return 0 if success, -12 in case of graph error
  */
-int generateRegularGraph(igraph_t &R_graph, int type, int n);
+int generateRegularGraph(igraph_t &R_graph, int n, int k);
 
 
 /**
  * This function generate the selected random graph
  *
- * @param [in,out] random_graph -  Pointer to an uninitialized graph objec
+ * @param [in,out] random_graph -  Pointer to an uninitialized graph object
  * @param [in] type - The type of the random graph: 1 geometric, 2 Barabasi-Albert, 3 Erdos-Renyi, 4 regular (clique)
  * @param [in] n - The number of nodes in the generated graph
  * @return 0 if success, -12 in case of graph error
@@ -540,7 +547,7 @@ using namespace std::chrono;
  *
  * @param [in] params - Struct with algorithm parameters
  */
-void parametersSummary(Params params);
+void printParams(Params params);
 
 high_resolution_clock::time_point t1, t2;
 
@@ -587,14 +594,14 @@ int main(int argc, char **argv) {
     outputOnFile = !params.outputFilename.empty();
 
     if (!outputOnFile) {
-        parametersSummary(params);
+        printParams(params);
     }
 
     /*** read dataset dimensions ***/
     StartTheClock();
     returnValue = readDataset(&dataset_storage, &dataset, params.name_file, ni);
     if (returnValue) {
-        cerr << "Can't read dataset" << endl;
+        cerr << "Can't read dataset" << params.name_file << endl;
         goto ON_EXIT;
     }
 
@@ -604,14 +611,16 @@ int main(int argc, char **argv) {
     }
 
     /** Compute last item for each peer */
-    peerLastItem = new (nothrow) long[DEFAULT_PEERS]();
-    if (!peerLastItem)
-        return memoryError(__FUNCTION__);
+    peerLastItem = new (nothrow) long[params.peers]();
+    if (!peerLastItem) {
+        returnValue = memoryError(__FUNCTION__);
+        goto ON_EXIT;
+    }
 
-    partitionDataset(peerLastItem, DEFAULT_PEERS, ni);
+    partitionDataset(peerLastItem, params.peers, ni);
 
     /** check the partitioning correctness */
-    returnValue = checkPartitioning(peerLastItem, DEFAULT_PEERS, ni);
+    returnValue = checkPartitioning(peerLastItem, params.peers, ni);
     if (returnValue)
         goto ON_EXIT;
 
@@ -619,7 +628,7 @@ int main(int argc, char **argv) {
     /** Graph generation */
     StartTheClock();
     // generate a connected random graph
-    returnValue = generateGraph(graph, DEFAULT_PEERS, params.graphType);
+    returnValue = generateGraph(graph, params.peers, params.graphType);
     if (returnValue)
         goto ON_EXIT;
 
@@ -649,6 +658,7 @@ int main(int argc, char **argv) {
         returnValue = mapToTiles(dataset, params.precision, projection[peerID], start, peerLastItem[peerID]);
         if(returnValue)
             goto  ON_EXIT;
+
         start = peerLastItem[peerID] + 1;
     }
 
@@ -686,14 +696,15 @@ int main(int argc, char **argv) {
         if (returnValue)
             goto  ON_EXIT;
     }
-    /*** Each peer restore tiles cardinality***/
+
+    /*** Each peer restores tiles cardinality***/
     for(int peerID = 0; peerID < params.peers; peerID++){
         returnValue = restoreCardinality(projection[peerID], dimestimate[peerID]);
         if (returnValue)
             goto  ON_EXIT;
     }
 
-    /*** Each peer remove tiles < threshold ***/
+    /*** Each peer removes tiles whiose cardinality is < threshold ***/
     for(int peerID = 0; peerID < params.peers; peerID++){
         returnValue = projectionThreshold(projection[peerID], params.threshold);
         if (returnValue)
@@ -701,6 +712,9 @@ int main(int argc, char **argv) {
     }
 
     if (params.typeAlgorithm == 0) {
+
+        /// distributed clustering
+
         squareProjection = new (nothrow) hashmap[params.peers];
         if (!squareProjection) {
             returnValue = memoryError(__FUNCTION__);
@@ -716,9 +730,10 @@ int main(int argc, char **argv) {
         if (!outputOnFile) {
             cout <<"\nStarting local clustering..." << endl;
         }
+
         StartTheClock();
 
-        /***Each peer clustering its own tiles and compute centroids of clusters***/
+        /*** Each peer clusters its own tiles and computes the centroids of clusters ***/
 
         clusters3 = new (nothrow) vectorSet3[params.peers];
         if (!clusters3){
@@ -731,7 +746,6 @@ int main(int argc, char **argv) {
             returnValue = memoryError(__FUNCTION__);
             goto ON_EXIT;
         }
-
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
             returnValue = clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
@@ -750,6 +764,7 @@ int main(int argc, char **argv) {
             cout << "Local clustering done!\n";
             cout << "Time (seconds) required by local Raster clustering: " << clustertime << endl;
         }
+
         StartTheClock();
 
         returnValue = distributedCluster(params, clusters3, graph, centroids);
@@ -762,18 +777,10 @@ int main(int argc, char **argv) {
             cout << "Time (seconds) required by distributed merge clusters: " << mergeclustertime << endl;
         }
 
-        /*** Print info about each peer's clusters***/
-        for(int peerID = 0; peerID < params.peers; peerID++) {
-            cout << "\npeer: " << peerID << endl;
-            returnValue = printClusters(clusters3[peerID], peerID);
-            if (returnValue)
-                goto ON_EXIT;
-        }
-        cout << "\n\n";
-
-
-
     } else {
+
+        // in this case all of the peers determine the same global projection
+        // then locally clusters the data
 
         clusters2 = new (nothrow) vectorSet2[params.peers];
         if (!clusters2){
@@ -782,7 +789,7 @@ int main(int argc, char **argv) {
         }
 
         if (!outputOnFile) {
-            cout <<"\nEach peer clustering the global projection..." << endl;
+            cout <<"\nEach peer clusters the global projection..." << endl;
         }
 
         StartTheClock();
@@ -792,6 +799,7 @@ int main(int argc, char **argv) {
             if (returnValue)
                 goto ON_EXIT;
         }
+
         delete[] projection, projection = nullptr;
 
         double clustertime = StopTheClock();
@@ -800,27 +808,37 @@ int main(int argc, char **argv) {
             cout << "Time (seconds) required by local clustering: " << clustertime << endl;
         }
 
-        /*** Print info about each peer's clusters***/
-        for(int peerID = 0; peerID < params.peers; peerID++) {
-            cout << "\npeer: " << peerID << endl;
-            printClusters(clusters2[peerID], peerID);
-        }
-        cout << "\n\n";
-
-
     }
 
-    /// Print some cluster statistics
+    /*** Print some cluster statistics ***/
+
+    /// Print info about each peer's clusters
+    /*for(int peerID = 0; peerID < params.peers; peerID++) {
+        cout << "\npeer: " << peerID << endl;
+        if (params.typeAlgorithm == 0)
+            returnValue = printClusters(clusters3[peerID], peerID);
+        else
+            returnValue = printClusters(clusters2[peerID], peerID);
+        if (returnValue)
+            goto ON_EXIT;
+    }
+    cout << "\n\n"*/;
+
+    /// print informations about peer 0 clusters
     returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, ni, proj, all_points);
     if (returnValue)
         goto ON_EXIT;
-    returnValue = printAllPointsClustered(clusters3[0], all_points);
+    if (params.typeAlgorithm == 0)
+        returnValue = printAllPointsClustered(clusters3[0], all_points);
+    else
+        returnValue = printAllPointsClustered(clusters2[0], all_points);
     if (returnValue)
         goto ON_EXIT;
 
     returnValue = 0;
 
     ON_EXIT:
+
     if (clusters2 != nullptr)
         delete[] clusters2, clusters2 = nullptr;
 
@@ -861,27 +879,30 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
+
     centroids.clear();
     unSet3::iterator it_tiles;
     double n, x, y;
 
     /************ for each cluster in clusters ************/
-    for (int j = 0; j < clusters.size(); j++) {
+    for (auto & cluster : clusters) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
         n = 0, x = 0, y = 0;
-        if (clusters.at(j).empty()) {
+        if (cluster.empty()) {
             cerr << "Bad cluster structure" << endl;
             centroids.clear();
             return dataError(__FUNCTION__);
         }
-        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+
+        it_tiles = cluster.begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
         /************ for each tile in cluster j-th ************/
-        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
+        for (int i = 0; i < cluster.size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
             x += (*it_tiles)[0]*(*it_tiles)[2];
             y += (*it_tiles)[1]*(*it_tiles)[2];
             n += (*it_tiles)[2];
             it_tiles++;
         }
+
         centroids.push_back({(int) (x/n), (int) (y/n)});
     }
 
@@ -889,10 +910,11 @@ int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
 }
 
 int simultaneousMaxMin(hashmap &projection, MinMax &minMax) {
-    if (projection.size() <= 0) {
+    if (projection.empty()) {
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
+
     int x1, x2, y1, y2;
 
     hashmap::iterator it;
@@ -969,28 +991,30 @@ int getGridSize(Grid &grid, int peers, int min) {
     grid.q = sqrt(peers*min);
     if (grid.q < 0 )
         return arithmeticError(__FUNCTION__);
+
     if ((grid.q * grid.q) != peers*min) { // check if peers*min is a perfect square
         grid.p = grid.q+1;                // if peers+min is not a perfect square chose p as int_sup(sqrt(peers*min))
         grid.q = grid.q * (grid.q + 1) < peers ? ++grid.q : grid.q;
     } else {
         grid.p = grid.q;
     }
+
     return 0;
 }
 
 
 /**
- * The first while iterates on all neighbor tiles, if a tile is yet present
- * into peer tiles, add the two cardinality, if not insert the tile into
- * peer projection. At the end of the while, peer contains in its hasmap all
- * commons tile with the sums of cardinality, the tiles that was in neighbor
- * but not in peer and the tiles that was in peer but not in neighbor.
- * Now is sufficient with the second while iterate on peer projection
+ * The first while iterates on all neighbor tiles, if a tile is still present
+ * into the peer tiles add the two cardinalities, if not insert the tile into
+ * the peer projection. At the end of the while, the peer contains in its hasmap all
+ * common tiles with the sum of their cardinalities, the tiles that were in the neighbor
+ * but not in peer and the tiles that were in the peer but not in the neighbor.
+ * Now it is enough for the second while to iterate on the peer projection
  * and divide by two all tiles cardinality to get the average for each
- * tile in a linear time (include common and uncommon tiles)
+ * tile in linear time (including both common and distinct tiles)
  */
 int projectionMerge(hashmap &projectionN, hashmap &projectionP){
-    if (projectionN.size() <= 0) {
+    if (projectionN.empty()) {
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -999,6 +1023,7 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
+
     hashmap::iterator itN;
     hashmap::iterator itP;
 
@@ -1013,14 +1038,17 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
                 return insertError(__FUNCTION__);
             }
         }
+
         itN++;
     }
-    // now compute average for each tile ( common or not)
+
+    // now compute the average for each tile (common or distinct)
     itP = projectionP.begin();
     while (itP != projectionP.end()) {
         itP -> second /= 2;
         itP++;
     }
+
     projectionN = projectionP;
 
     return 0;
@@ -1028,32 +1056,33 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
 
 
 /**
- * This function use an hashmap to merge in linear time 2 clusters with dimension m and n.
- * A naive method check all m tiles of first cluster with all n tiles of second clusters
- * with a complexity O(n*m) in worst case.
- * If we assume that we can insert and find an element in the hashmap in time O(1) in average case,
- * the first for cycle insert in time O(m) all tiles using as key only the coordinate.
- * The second for cycle try to find the n tiles into the hashmap, it will cost O(n).
- * If is not present add it to the hashmap, also in this case the add operation
+ * This function uses an hashmap to merge in linear time two clusters with dimensions m and n.
+ * A naive method checks all m tiles of the first cluster with all n tiles of the second cluster
+ * with a complexity O(n*m) in the worst case.
+ * If we assume that we can insert and find an element in the hashmap in time O(1) on average,
+ * the first for cycle inserts in time O(m) all tiles using as key only the coordinates.
+ * The second for cycle tries to find the n tiles into the hashmap, it costs O(n).
+ * If a tile is not present add it to the hashmap, also in this case the add operation
  * in the worst case will be O(n).
  */
 int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
-    if (clusterN.size() <= 0) {
+    if (clusterN.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
-    if (clusterP.size() <= 0) {
-        cerr << "Bad clusters data structure" << endl;
-        return dataError(__FUNCTION__);
-    }
-    unSet3::iterator itN = clusterN.begin();
-    unSet3::iterator itP = clusterP.begin();
-    hashmap::iterator itTmp;
 
+    if (clusterP.empty()) {
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
+
+    auto itN = clusterN.begin();
+    auto itP = clusterP.begin();
+    hashmap::iterator itTmp;
     hashmap tmp;
     unSet3 s;
 
-    array<int, 2> tile;
+    array<int, 2> tile{};
     int cardinality;
 
     for (int k = 0; k < clusterN.size(); ++k) {
@@ -1064,6 +1093,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
         if (!(check.second)) {
             return insertError(__FUNCTION__);
         }
+
         itN++;
     }
 
@@ -1084,6 +1114,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
                 return insertError(__FUNCTION__);
             }
         }
+
         itP++;
     }
 
@@ -1095,6 +1126,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
         }
         itTmp++;
     }
+
     clusterP.operator=(s);
     clusterN.operator=(s);
 
@@ -1103,17 +1135,17 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
 
 
 /**
- * The double for cycle find all common cluster and set to 1 the correspondent index
- * into notCopy structure. For example if the k-th cluster of clusterN is equal at the
+ * The nested for loops find all common clusters and set to 1 the corresponding index
+ * into notCopy structure. For example, if the k-th cluster of clusterN is equal to the
  * l-th clusterP, then notCopyN[k] and notCopyP[l] will be set to 1.
- * In this way the nex for cycle using these information will copy only the cluster
- * that are not common.
+ * In this way the nex for loop using these information will copy only the clusters
+ * that are not common (i.e., the clusters which are distinct).
  */
 int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance) {
-    int tmpSize = centroidsP.size(); /// get the actual dimension because it will increase but we are not interested at the clusters that will be added at the end
-    int returnValue = -1;
-    int *notCopyP = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterP is also present in clusterN */
-    int *notCopyN = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, means that i-th cluster of clusterN is also present in clusterP */
+    int tmpSize = centroidsP.size(); /// get the current dimension because it will increase but we are not interested to the clusters that will be added at the end
+    int returnValue;
+    int *notCopyP = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, it means that the i-th cluster of clusterP is also present in clusterN */
+    int *notCopyN = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, it means that the i-th cluster of clusterN is also present in clusterP */
 
     notCopyP = new (nothrow) int[centroidsP.size()]();
     if(!notCopyP)
@@ -1138,6 +1170,7 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
                     }
 
                 }
+
                 break;
             }
         }
@@ -1149,6 +1182,7 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
             centroidsP.push_back({centroidsN.at(k)[0], centroidsN.at(k)[1]});
         }
     }
+
     for (int l = 0; l < tmpSize; l++) {
         if (!notCopyP[l]) {
             clustersN.push_back(clustersP.at(l));
@@ -1172,7 +1206,7 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
 int average(double *x, double y)  {
     if (x == nullptr) {
         cerr << "x cannot be null!" << endl;
-        return arithmeticError(__FUNCTION__);
+        return argumentError(__FUNCTION__);
     } else {
         *x = (*x+y)/2.0;
     }
@@ -1182,13 +1216,14 @@ int average(double *x, double y)  {
 
 int readDataset(double **dataset_storage, double ***dataset, string name_file, int &ni) {
     int row, column;
-    int returnValue = -1;
+    int returnValue;
 
     returnValue = getDim(name_file, row, column);
     if (returnValue) {
-        cerr << "Can't read dataset dimension" << endl;
+        cerr << "Can't read dimensions of dataset " << name_file << endl;
         return returnValue;
     }
+
     ni = row;
 
     *dataset_storage = new (nothrow) double[row*column];
@@ -1209,6 +1244,7 @@ int readDataset(double **dataset_storage, double ***dataset, string name_file, i
             for (int x = 0; x < i; x++) {
                 delete[] (*dataset)[x], (*dataset)[x] = nullptr;
             }
+
             delete[] *dataset, *dataset = nullptr;
             return memoryError(__FUNCTION__);
         }
@@ -1220,6 +1256,7 @@ int readDataset(double **dataset_storage, double ***dataset, string name_file, i
         for (int i = 0; i < row; i++) {
             delete[] (*dataset)[i], (*dataset)[i] = nullptr;
         }
+
         delete[] *dataset, *dataset = nullptr;
         return returnValue;
     }
@@ -1445,7 +1482,7 @@ void printGraphType(int type)
 
 }
 
-void parametersSummary(Params params) {
+void printParams(Params params) {
     cout << "\n\nPARAMETERS:\n";
     cout << "dataset = " << params.name_file << "\n";
     cout << "precision = " << params.precision << "\n";
@@ -1463,7 +1500,7 @@ void parametersSummary(Params params) {
 }
 
 int generateGraph(igraph_t &graph, int peers, int graphType) {
-    int returnValue = -12;
+    int returnValue;
     // turn on attribute handling in igraph
     igraph_i_set_attribute_table(&igraph_cattribute_table);
 
@@ -1543,14 +1580,17 @@ int checkSecondConvergence(int prevclustersestimate, int clustersestimate, int &
 }
 
 int restoreCardinality(hashmap &projection, int dimestimate) {
-    if (projection.size() == 0)
+    if (projection.empty())
         return dataError(__FUNCTION__);
+
     hashmap::iterator it;
     it = projection.begin();
+
     while (it != projection.end()) {
         it->second = round(it->second * dimestimate);
         it++;
     }
+
     return 0;
 }
 
@@ -1575,7 +1615,6 @@ int getTilesGroup(TilesGroup &tilesGroup, Grid grid, MinMax &minMax ) {
         return -30;
     }
 
-
     return 0;
 
 }
@@ -1592,7 +1631,7 @@ int getNumberOfSquares(int &squares, int peerID, Grid grid, int dimestimate, int
 int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, MinMax &minMax, int k, int peerID) {
     int i, j;
     int check;
-    TilesGroup tG;
+    TilesGroup tG{};
 
     /// compute how group tiles for each square on y and x axis
     check = getTilesGroup(tG, grid, minMax);
@@ -1600,7 +1639,8 @@ int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, M
         cerr << "Can't group tiles" << endl;
         return check;
     }
-    /// i, j are the top-right corner coordinates in a grid p x q ( they are not the real coordinates into our domain)
+
+    /// i, j are the top-right corner coordinates in a p x q grid (they are not the real coordinates into our domain)
     i = (peerID + k*(int)dimestimate) /grid.p + 1;
     j = (peerID + k*(int)dimestimate) %grid.p + 1;
 
@@ -1623,9 +1663,11 @@ int getSquaresCoordinate(Coordinates &coordinates, Grid grid, int dimestimate, M
 int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates *coordinates, int squares) {
     if (projection.size() == 0)
         return dataError(__FUNCTION__);
+
     int skip;
     hashmap::iterator it;
     it = projection.begin();
+
     while (it != projection.end()) {
         skip = 0;
         int a = (it -> first)[0];
@@ -1641,28 +1683,32 @@ int filterProjection(hashmap &projection, hashmap &squareProjection, Coordinates
                 break;
             }
         }
+
         if (!skip)
             it++;
+
     }
+
     return 0;
+
 }
 
 int getSquareProjection(int minSquares, hashmap &projection, double dimestimate, hashmap &squareProjection, int peerID) {
     int returnValue;
     int numberOfSquares;
 
-    Grid grid;
-    MinMax minMax;
+    Grid grid{};
+    MinMax minMax{};
     Coordinates *coordinates = nullptr;
 
-    /*** Simultaneous minimum and maximum algorithm***/
+    /*** Simultaneous minimum and maximum algorithm ***/
     returnValue = simultaneousMaxMin(projection, minMax);
     if (returnValue) {
         cerr << "Can't get Max and Min of projection" << endl;
         return returnValue;
     }
 
-    /// find grid p*q in order to assign at least one tile for each peer, with p = int_sup(sqrt(peers))
+    /// find grid p*q in order to assign at least one tile to each peer, with p = int_sup(sqrt(peers))
     returnValue = getGridSize(grid,(int) dimestimate, minSquares);
     if (returnValue) {
         cerr << "Can't get Max and Min of projection" << endl;
@@ -1712,44 +1758,41 @@ int handleArgument(int argc, char **argv, Params &params) {
 
         desc.add_options()
                 ("help", "produce help message")
-                (",p",po::value<int>(), "number of peers")
+                (",p", po::value<int>(), "number of peers")
                 (",f", po::value<int>(),"fan-out of peers")
-                (",d",po::value<int>(), "graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular")
-                ("ct",po::value<double >(), "convergence tolerance")
-                ("cl",po::value<int>(), "number of consecutive rounds in which convergence must be satisfied")
-                (",o",po::value<string>(), "output filename, if specified a file with this name containing all of the peers stats is written")
-                (",r",po::value<int>(), "number of communication rounds")
-                ("pr",po::value<double>(), "number of precision for raster")
-                ("thr",po::value<int>(), "umber of threshold for raster")
+                (",d", po::value<int>(), "graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular")
+                ("ct", po::value<double >(), "convergence tolerance")
+                ("cl", po::value<int>(), "number of consecutive rounds in which convergence must be satisfied")
+                (",o", po::value<string>(), "output filename, if specified a file with this name containing all of the peers stats is written")
+                (",r", po::value<int>(), "number of communication rounds")
+                ("pr", po::value<double>(), "precision for raster")
+                ("thr",po::value<int>(), "threshold for raster")
                 ("maxdist",po::value<int>(), "max manhattann distance")
-                ("minsize",po::value<int>(), "number of min size for raster")
+                ("minsize",po::value<int>(), "min size for raster")
                 ("minsquare",po::value<int>(), "file name containing dataset")
                 (",i",po::value<string>(), "file name containing dataset")
-                (",t",po::value<int>(), "type of algorithm");
-
+                (",t",po::value<int>(), "type of algorithm")
+                ;
 
         po::variables_map vm;
-
         try
         {
             po::store(po::parse_command_line(argc, argv, desc), vm); // throws on error
 
             /** --help option
              */
-            if ( vm.count("help")  )
-            {
+            if (vm.count("help")) {
                 cerr << desc << endl;
                 cerr.flush();
-                return argumentsError(__FUNCTION__);
+                return argumentError(__FUNCTION__);
             }
-
             po::notify(vm); /// throws on error, so do after help in case there are any problems
 
         } catch(boost::program_options::error& e) { /// in case of unrecognised options
             cerr << "ERROR: " << e.what() << std::endl << std::endl;
             cerr << desc << endl;
             cerr.flush();
-            return argumentsError(__FUNCTION__);
+            return argumentError(__FUNCTION__);
         }
 
         if ( vm.count("-p") )
@@ -1797,30 +1840,29 @@ int handleArgument(int argc, char **argv, Params &params) {
 
     } catch(std::exception& e) {
         cerr <<"ERROR: " << e.what() << endl;
-        return argumentsError(__FUNCTION__);
+        return argumentError(__FUNCTION__);
     }
-
 
     return 0;
 
 }
 
 int initParams(Params &params) {
-    params.name_file = DEFAULT_NAME_FILE;
-    params.peers = DEFAULT_PEERS;
-    params.fanOut = DEFAULT_FANOUT;
-    params.graphType = DEFAULT_GRAPHTYPE;
-    params.convThreshold = DEFAULT_CONVTHRESHOLD;
-    params.convLimit = DEFAULT_CONVLIMIT;
-    params.outputFilename = DEFAULT_OUTPUTFILENAME;
-    params.roundsToExecute = DEFAULT_ROUNDSTOEXECUTE;
-    params.precision = DEFAULT_PRECISION;
-    params.threshold = DEFAULT_THRESHOLD;
-    params.min_size = DEFAULT_MIN_SIZE;
-    params.radius = DEFAULT_RADIUS;
-    params.maxDistance = DEFAULT_MAXDISTANCE;
-    params.typeAlgorithm = DEFAULT_TYPEALGORITHM;
-    params.minSquares = DEFAULT_MINSQUARES;
+    params.name_file =          DEFAULT_NAME_FILE;
+    params.peers =              DEFAULT_PEERS;
+    params.fanOut =             DEFAULT_FANOUT;
+    params.graphType =          DEFAULT_GRAPHTYPE;
+    params.convThreshold =      DEFAULT_CONVTHRESHOLD;
+    params.convLimit =          DEFAULT_CONVLIMIT;
+    params.outputFilename =     DEFAULT_OUTPUTFILENAME;
+    params.roundsToExecute =    DEFAULT_ROUNDSTOEXECUTE;
+    params.precision =          DEFAULT_PRECISION;
+    params.threshold =          DEFAULT_THRESHOLD;
+    params.min_size =           DEFAULT_MIN_SIZE;
+    params.radius =             DEFAULT_RADIUS;
+    params.maxDistance =        DEFAULT_MAXDISTANCE;
+    params.typeAlgorithm =      DEFAULT_TYPEALGORITHM;
+    params.minSquares =         DEFAULT_MINSQUARES;
     return 0;
 }
 
@@ -1853,10 +1895,10 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
     rounds = 0;
     Numberofconverged = params.peers;
 
-    cout <<"\nStarting distributed agglomeration merge..." << endl;
+    cout <<"\nStarting distributed projection merge..." << endl;
 
     /*** Merge information about agglomeration ***/
-    while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
+    while((params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
 
         memcpy(prevestimate, dimestimate, params.peers * sizeof(double));
 
@@ -1872,17 +1914,21 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
                 int neighborID = (int) VECTOR(neighbors)[i];
                 igraph_integer_t edgeID;
                 igraph_get_eid(&graph, &edgeID, peerID, neighborID, IGRAPH_UNDIRECTED, 1);
+
                 returnValue = projectionMerge(projection[neighborID], projection[peerID]);
                 if (returnValue) {
                     cerr << "Can't complete projection merge" << endl;
                     goto ON_EXIT;
                 }
+
                 returnValue = average(&dimestimate[peerID], dimestimate[neighborID]);
                 if (returnValue) {
                     cerr << "Can't compute average" << endl;
                     goto ON_EXIT;
                 }
+
                 dimestimate[neighborID] = dimestimate[peerID];
+
             }
 
             igraph_vector_destroy(&neighbors);
@@ -1893,6 +1939,7 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
             for(int peerID = 0; peerID < params.peers; peerID++){
                 if(converged[peerID])
                     continue;
+
                 checkFirstConvergence(prevestimate[peerID], dimestimate[peerID], params.convThreshold,convRounds[peerID], converged[peerID], params.convLimit);
                 if(converged[peerID])
                     Numberofconverged --;
@@ -1900,6 +1947,7 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
 
 
         }
+
         rounds++;
         cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
 
@@ -1935,8 +1983,9 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     clustersestimate = new (nothrow) int[params.peers]();
     if (!clustersestimate)
         return memoryError(__FUNCTION__);
+
     for(int i = 0; i < params.peers; i++)
-        clustersestimate[i] = (double )clusters3[i].size();
+        clustersestimate[i] = clusters3[i].size();
 
 
     prevclustersestimate = new (nothrow) int[params.peers]();
@@ -1963,7 +2012,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
 
     cout <<"\nStarting distributed merge of clusters..." << endl;
 
-    /*** Start distributed cluster merge***/
+    /*** Start distributed cluster merge ***/
     while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
 
         memcpy(prevclustersestimate, clustersestimate, params.peers * sizeof(int));
@@ -1994,6 +2043,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
             }
 
             igraph_vector_destroy(&neighbors);
+
         }
 
         // check local convergence
@@ -2009,9 +2059,11 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
 
             }
         }
+
         rounds++;
         cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
         params.roundsToExecute--;
+
     }
 
     returnValue = 0;
@@ -2031,6 +2083,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
         delete[] prevclustersestimate, prevclustersestimate = nullptr;
 
     return returnValue;
+
 }
 
 int restoreDimestimate(double &dimestimate) {
@@ -2039,5 +2092,6 @@ int restoreDimestimate(double &dimestimate) {
         return -40;
     } else
         dimestimate = round(1/dimestimate);
+
     return 0;
 }

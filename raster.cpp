@@ -20,40 +20,54 @@ int getDim(string name_file, int &row, int &column) {
     row = 0;
     column = 0;
     ifstream inputFile(name_file);
-    while (inputFile) {
+    if(inputFile.is_open()){
+
         string s;
-        if (!getline(inputFile, s)) break;
-        if (row == 0) {
-            istringstream ss(s);
-            while (ss) {
+        while (getline(inputFile, s)) {
+
+            if (row == 0) {
+                istringstream ss(s);
                 string line;
-                if (!getline(ss, line, ','))
-                    break;
-                column++;
+                while (getline(ss, line, ',')) {
+                    column++;
+                }
             }
+
+            row++;
+
         }
-        row++;
+
+        inputFile.close();
+
     }
-    if (!inputFile.eof()) {
+    else{
+        cerr << "the file " << name_file << " is not open!" << endl;
         return fileError(__FUNCTION__);
     }
-    inputFile.close();
+
     return 0;
 }
 
 int loadData(double **m, string name_file, int column) {
+
+    if(!m){
+        cerr << "The argument " << m << " is not a valid pointer" << endl;
+        return argumentError(__FUNCTION__);
+    }
+
     ifstream inputFile(name_file);
-    int row = 0;
-    while (inputFile) {
+    if(inputFile.is_open()){
+
+        int row = 0;
         string s;
-        if (!getline(inputFile, s)) break;
-        if (s[0] != '#') {
-            istringstream ss(s);
-            while (ss) {
+        while (getline(inputFile, s)) {
+
+            if (s[0] != '#') {
+                istringstream ss(s);
+
                 for (int i = 0; i < column; i++) {
                     string line;
-                    if (!getline(ss, line, ','))
-                        break;
+                    getline(ss, line, ',');
                     try {
                         m[row][i] = stod(line);
                     }
@@ -64,21 +78,27 @@ int loadData(double **m, string name_file, int column) {
                         return arithmeticError(__FUNCTION__);
                     }
                 }
+
             }
+
+            row++;
+
         }
-        row++;
+
+        inputFile.close();
+
     }
-    if (!inputFile.eof()) {
+    else {
         return fileError(__FUNCTION__);
     }
-    inputFile.close();
+
     return 0;
 }
 
 int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) {
     int x = coordinate[0];
     int y = coordinate[1];
-    int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
+    int radius = 1; /**!< Hierarchical Level of neighbors involved, 1 means the eight nearest neighbors, 2 also includes the neighbors of neighbors and so on */
     hashmap::iterator it;
     unSet2 neighbors;
     unSet2::iterator it_neighbor;
@@ -93,7 +113,7 @@ int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) 
         }
     }
 
-    /// if a neighbor is present in projection, remove from there and add it in result
+    /// if a neighbor is in the projection, remove it from there and add it in result
     it_neighbor = neighbors.begin();
     for (int i = 0; i < neighbors.size(); i++) {
         it = projection.find(*it_neighbor);
@@ -103,7 +123,7 @@ int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) 
             if (!check.second) {
                 return insertError(__FUNCTION__);
             }
-            projection.erase(it++);
+            projection.erase(it++); // delete tile from projection and increase iterator (after erase (it) is not more valid)
         }
     }
 
@@ -113,7 +133,7 @@ int getNeighbors(array<int, 2> coordinate, hashmap &projection, unSet2 &result) 
 int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &projection, unSet3 &result) {
     int x = coordinate[0];
     int y = coordinate[1];
-    int radius = 1; /**!< Level of neighbor, 1 means the eight nearest neighbors, 2 include also the neighbors of neighbors and so on*/
+    int radius = 1; /**!< Hierarchical Level of neighbors involved, 1 means the eight nearest neighbors, 2 also includes the neighbors of neighbors and so on */
     hashmap::iterator it;
     unSet2 neighbors;
     unSet2::iterator it_neighbor;
@@ -127,7 +147,7 @@ int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &p
         }
     }
 
-    /// if a neighbor is present in projection or squareProjection, remove from there and add it in result
+    /// if a neighbor is in the projection or in the squareProjection, remove it from there and add it in result
     it_neighbor = neighbors.begin();
     for (int i = 0; i < neighbors.size(); i++) {
         it = squareProjection.find(*it_neighbor);
@@ -136,7 +156,7 @@ int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &p
             if (!check.second) {
                 return insertError(__FUNCTION__);
             }
-            squareProjection.erase(it++);
+            squareProjection.erase(it++); // delete tile from squareProjection and increase iterator (after erase (it) is not more valid)
         } else {
             it = projection.find(*it_neighbor);
             if (it != projection.end()) {
@@ -144,7 +164,7 @@ int getNeighbors(array<int, 3> coordinate, hashmap &squareProjection, hashmap &p
                 if (!check.second) {
                     return insertError(__FUNCTION__);
                 }
-                projection.erase(it++);
+                projection.erase(it++); // delete tile from projection and increase iterator (after erase (it) is not more valid)
             }
         }
         it_neighbor++;
@@ -192,13 +212,13 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
         it = projection.find(tile);
         if (it != projection.end()) {
             it->second++;
-            /// if the tile is present into projection then it must be present into all_points
+            /// if the tile is in the projection then it must be present into all_points
             it_map_all_points = all_points.find(tile);
             if (it_map_all_points == all_points.end()) {
                 return findError(__FUNCTION__);
             }
 
-            /// update mapping tile-points adding the new point
+            /// update the tile-points mapping, adding the new point
             auto a = (it_map_all_points -> second).insert({m[i][0],m[i][1]});
             if (!(a.second)) {
                 return insertError(__FUNCTION__);
@@ -209,7 +229,7 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
                 return insertError(__FUNCTION__);
             }
 
-            /// create mapping tile-point
+            /// create tile-point mapping
             unordered_set<array<double , 2>, container_hasher> point;
             auto b = point.insert({m[i][0], m[i][1]});
             if (!(b.second)) {
@@ -222,14 +242,15 @@ int mapToTilesPrime(double **m, double precision, int threshold, int n, hashmap 
         }
 
     }
-    /// remove tile with cardinality < threshold
+    /// remove tiles with cardinality < threshold
     projectionThreshold(projection, threshold);
+
     return 0;
 
 }
 
 int projectionThreshold(hashmap &projection, int threshold) {
-    if (projection.size() <= 0) {
+    if (projection.empty()) {
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -247,7 +268,7 @@ int projectionThreshold(hashmap &projection, int threshold) {
 }
 
 int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
-    if (projection.size() <= 0) {
+    if (projection.empty()) {
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -300,7 +321,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
 } // unordered
 
 int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters) {
-    if (squareProjection.size() <= 0) {
+    if (squareProjection.empty()) {
         cerr << "Bad projection data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -309,7 +330,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
     /// read and remove all tiles one by one from projection
     while ((iterator = squareProjection.begin()) != squareProjection.end()) {
         // read and remove first element recursively
-        array<int, 3> x;
+        array<int, 3> x{};
         x = {(iterator->first)[0], (iterator->first)[1],(int) iterator->second};
         squareProjection.erase(iterator++);
 
@@ -322,9 +343,13 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
 
         /// get neighbors of tile in exam
         unSet3 to_check;
-        getNeighbors(x, squareProjection, projection, to_check);
+        int return_value = getNeighbors(x, squareProjection, projection, to_check);
+        if(return_value != 0){
+            cerr << "getNeighbors() failed" << endl;
+            return functionError(__FUNCTION__);
+        }
 
-        /// for each neighbor, try to find his neighbors recursively in order to add they to a single cluster
+        /// for each neighbor, try to find his neighbors recursively in order to add them to a single cluster
         while (!to_check.empty()) {
             array<int, 3> value = *to_check.begin() ;
             to_check.erase((to_check.begin()));
@@ -343,7 +368,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
                 temp.erase((temp.begin()));
             }
         }
-        /// validate visited as cluster if is size is >= min size
+        /// visited is a valid cluster if is size is >= min size
         if (visited.size() >= min_size) {
             clusters.push_back(visited);
         }
@@ -355,18 +380,19 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
 // under the function there are the two variants of T type
 template <typename T>
 int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
-    if (clusters.size() <= 0) {
+    if (clusters.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
 
-    if (all_points.size() <= 0) {
+    if (all_points.empty()) {
         cerr << "Bad all_points data structure" << endl;
         return dataError(__FUNCTION__);
     }
 
-    ofstream outfile("clustered.csv");
+    ofstream outfile("./clustered.csv");
     if (!outfile.is_open()) {
+        cerr << "can not open file clustered.csv for writing" << endl;
         return fileError(__FUNCTION__);
     }
 
@@ -381,25 +407,25 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
-        if (!clusters.at(j).size()) {
+        if (clusters.at(j).empty()) {
             cerr << "Bad cluster structure" << endl;
             outfile.clear();
             outfile.close();
             return dataError(__FUNCTION__);
         }
-        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of clusters)
         /************ for each tile in cluster j-th ************/
         for (int i = 0; i < clusters.at(j).size(); i++) {
             it_map_all_points = all_points.find({(*it_tiles)[0], (*it_tiles)[1]}); // try to find in all_points the tile (with its list of points) from cluster
             if (it_map_all_points != all_points.end()) {
-                if (!(it_map_all_points -> second).size()) {
+                if ((it_map_all_points -> second).empty()) {
                     cerr << "Bad all_points structure" << endl;
                     outfile.clear();
                     outfile.close();
                     return dataError(__FUNCTION__);
 
                 }
-                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
+                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the found tile
                 /************ for each point in the tile ************/
                 for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
                     outfile << (*it_set_all_points)[0] << ",";
@@ -415,19 +441,19 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
         }
     }
     // in case of points/tiles not clustered
-    if (all_points.size() > 0) {
+    if (!all_points.empty()) {
         it_map_all_points = all_points.begin(); // first tile remaining in all_points
-        /************ for each tile that are not in the clusters ************/
+        /************ for each tile that is not in the clusters ************/
         for (int i = 0; i < all_points.size(); i++) {
             if (it_map_all_points != all_points.end()) {
-                if (!(it_map_all_points -> second).size()) {
+                if ((it_map_all_points -> second).empty()) {
                     cerr << "Bad all_points structure" << endl;
                     outfile.clear();
                     outfile.close();
                     return dataError(__FUNCTION__);
                 }
-                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the founded tile
-                /************ for each point in the tiles that are not in the clusters ************/
+                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the found tile
+                /************ for each point in the tiles that is not in the clusters ************/
                 for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
                     outfile << (*it_set_all_points)[0] << ",";
                     outfile << (*it_set_all_points)[1] << ",";
@@ -461,7 +487,7 @@ template int printAllPointsClustered<array<int, 2>>(vectorSet2 &clusters, hashma
 // under the function there are the two variants of T type
 template <typename T>
 int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peerID) {
-    if (clusters.size() <= 0) {
+    if (clusters.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
@@ -476,7 +502,7 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
     int count_tiles = 0;
     for (int j = 0; j < clusters.size(); j++) {
         outfile << "Cluster n° " << j << " with size " << clusters.at(j).size() << ": " << endl;
-        if (!clusters.at(j).size()) {
+        if (clusters.at(j).empty()) {
             cerr << "Bad cluster structure" << endl;
             outfile.clear();
             outfile.close();
@@ -484,11 +510,11 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
         }
         it = clusters.at(j).begin(); // pointer to start of j-th cluster (cluster = list of tiles)
         for (int i = 0; i < clusters.at(j).size(); i++) {
-            count_tiles++; // count the total number of tiles clustered
+            count_tiles++; // count the total number of clustered tiles
             outfile << (*it)[0] << ",";
             outfile << (*it)[1] << ",";
             outfile << j << endl;
-            it++; // next tile of the actual cluster
+            it++; // next tile of the current cluster
         }
     }
     outfile.close();
@@ -559,9 +585,9 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
-        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of clusters)
         /************ for each tile in cluster j-th ************/
-        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
+        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in the j-th cluster
             it_map_all_points = all_points.find((*it_tiles)); // try to find in all_points the tile (with its list of points) from cluster
             size_cluster[j] += (it_map_all_points -> second).size();
             tile_points[j][i] = (it_map_all_points -> second).size();
@@ -571,13 +597,13 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         /************ for each tile in cluster j-th ************/
-        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
+        for (int i = 0; i < clusters.at(j).size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in the j-th cluster
             pji = tile_points[j][i]/size_cluster[j];
             shannon[j] += -(pji * log2(pji));
         }
     }
 
-    // calculating density for each cluster
+    // calculating the density for each cluster
     /************ for each cluster in clusters ************/
     for (int j = 0; j < clusters.size(); j++) {
         density[j] = size_cluster[j]/(clusters.at(j).size() * area);

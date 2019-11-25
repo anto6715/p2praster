@@ -56,7 +56,7 @@ int arithmeticError(string nameFunction) {
  * @return -7
  */
 int fileError(string nameFunction) {
-    cerr << nameFunction << ": Can't open file: " << "clustered.csv" << endl;
+    cerr << nameFunction << ": Can't open file: " << endl;
     return -7;
 }
 
@@ -113,12 +113,23 @@ int graphError(string nameFunction) {
 /**
  *
  * @param [in] nameFunction - Name of the calling function
+ * @return -13
+ */
+int functionError(string nameFunction) {
+    cerr << nameFunction << ": One of the called functions failed" << endl;
+    return -13;
+}
+
+/**
+ *
+ * @param [in] nameFunction - Name of the calling function
  * @return -99
  */
-int argumentsError(string nameFunction) {
-    cerr << nameFunction << ": Read arguments error" << endl;
+int argumentError(string nameFunction) {
+    cerr << nameFunction << ": One of the arguments is not valid" << endl;
     return -99;
 }
+
 
 
 

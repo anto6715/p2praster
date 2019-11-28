@@ -12,11 +12,12 @@
 #include "raster.h"
 #include "error.h"
 #include "boost/program_options.hpp"
+#include "statistic.h"
 
 namespace po = boost::program_options;
 
 /*** Default Parameters ***/
-const int           DEFAULT_PEERS = 100; // number of peers
+const int           DEFAULT_PEERS = 500; // number of peers
 const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
 const double        DEFAULT_CONVTHRESHOLD = 0.001; // local convergence tolerance
@@ -27,7 +28,7 @@ const int           DEFAULT_THRESHOLD = 2;
 const int           DEFAULT_MIN_SIZE = 3;
 const int           DEFAULT_RADIUS = 0;
 const int           DEFAULT_MAXDISTANCE = 2;
-const int           DEFAULT_TYPEALGORITHM = 1;
+const int           DEFAULT_TYPEALGORITHM = 0;
 const int           DEFAULT_MINSQUARES = 1;
 //const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
@@ -432,7 +433,7 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
 
 
 /**
- * This function simualates the second round of communication
+ * This function simulates the second round of communication
  * where each peer communicates with fanOut of its neighbors
  * in order to merge information about the clusters
  *
@@ -570,6 +571,13 @@ int main(int argc, char **argv) {
     double          rastertime;
     double          gengraphtime;
     double          greaddatasettime;
+    double          Precision;
+    double          Recall;
+    double          F1;
+    double          Hentropy;
+
+
+
 
     /*** Array declarations ***/
     long *peerLastItem = nullptr; // index of a peer last item
@@ -581,8 +589,14 @@ int main(int argc, char **argv) {
     vectorSet3 *clusters3 = nullptr;
     vector<array<int, 2>> *centroids = nullptr;
     vectorSet2 *clusters2 = nullptr;
+
     hashmapUnset all_points;
-    hashmap proj;
+    hashmapUnset all_points_sequential;
+    hashmap projection_sequential;
+    hashmap projection_distributed;
+    vectorSet2 clusters_sequential;
+    vectorSet2D all_pointsClusters;
+    vectorSet2D all_pointsClusters_sequential;
 
     /** assign parameters read from command line */
     initParams(params);
@@ -749,11 +763,14 @@ int main(int argc, char **argv) {
 
         for(int peerID = 0; peerID < params.peers; peerID++) {
             returnValue = clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
-            if (returnValue)
-                goto  ON_EXIT;
-            returnValue = getCentroids(clusters3[peerID], centroids[peerID]);
-            if (returnValue)
-                goto  ON_EXIT;
+            if (returnValue) {
+                cout << "Peer: " << peerID << " didn't found any cluster" << endl;
+            } else {
+                returnValue = getCentroids(clusters3[peerID], centroids[peerID]);
+                if (returnValue)
+                    goto  ON_EXIT;
+            }
+
         }
 
         delete[] projection, projection = nullptr;
@@ -810,30 +827,72 @@ int main(int argc, char **argv) {
 
     }
 
-    /*** Print some cluster statistics ***/
 
-    /// Print info about each peer's clusters
-    /*for(int peerID = 0; peerID < params.peers; peerID++) {
-        cout << "\npeer: " << peerID << endl;
-        if (params.typeAlgorithm == 0)
-            returnValue = printClusters(clusters3[peerID], peerID);
-        else
-            returnValue = printClusters(clusters2[peerID], peerID);
-        if (returnValue)
-            goto ON_EXIT;
-    }
-    cout << "\n\n"*/;
 
-    /// print informations about peer 0 clusters
-    returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, ni, proj, all_points);
+    /// save mapping tile-points into all_points algorithm with different parameters
+    returnValue = mapToTilesPrime(dataset, -4.2, 2, ni, projection_sequential, all_points_sequential);
     if (returnValue)
         goto ON_EXIT;
+
+    /// save mapping tile-points into all_points algorithm with default parameters
+    returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, ni, projection_distributed, all_points);
+    if (returnValue)
+        goto ON_EXIT;
+
+    /// obtain clusters with sequential algorithm
+    returnValue = clusteringTiles(projection_sequential, params.min_size, clusters_sequential);
+    if (returnValue) {
+        cerr << "Can't complete sequential clustering" << endl;
+        goto ON_EXIT;
+    }
+
+    /// get clusters with points from clusters with tiles for sequential and distributed clusters
+    if (params.typeAlgorithm == 0)
+        returnValue = getAllPointsClustered(clusters3[0], all_points, all_pointsClusters); // distributed version 0
+    else
+        returnValue = getAllPointsClustered(clusters2[0], all_points, all_pointsClusters); // distributed version 1
+    if (returnValue)
+        goto ON_EXIT;
+
+    returnValue = getAllPointsClustered(clusters_sequential, all_points_sequential, all_pointsClusters_sequential); // sequential
+    if (returnValue)
+        goto ON_EXIT;
+
+
+    /// Obtain some statistics
+    returnValue = getPrecision(all_pointsClusters, all_pointsClusters_sequential, Precision);
+    if (returnValue) {
+        cerr << "Can't compute Precision" << endl;
+        goto ON_EXIT;
+    }
+
+    returnValue = getRecall(all_pointsClusters, all_pointsClusters_sequential, Recall);
+    if (returnValue) {
+        cerr << "Can't compute Recall" << endl;
+        goto ON_EXIT;
+    }
+
+    F1 = getFMeasure(Recall, Precision);
+
+    getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, ni, Hentropy);
+
+
+    cout << "\n\n";
+    cout << "Precision: " << Precision << endl;
+    cout << "Recall: " << Recall << endl;
+    cout << "F1 measure: " << F1 << endl;
+    cout << "Conditional Entropy: " << Hentropy << endl;
+    cout << "\n\n";
+
+
+    /// Prints information about clusters
     if (params.typeAlgorithm == 0)
         returnValue = printAllPointsClustered(clusters3[0], all_points);
     else
         returnValue = printAllPointsClustered(clusters2[0], all_points);
     if (returnValue)
         goto ON_EXIT;
+
 
     returnValue = 0;
 

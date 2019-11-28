@@ -46,7 +46,9 @@ struct container_hasher {
 
 typedef unordered_map<array<int, 2>, double, container_hasher> hashmap;
 typedef vector<unordered_set<array<int, 2>, container_hasher>> vectorSet2;
+typedef vector<unordered_set<array<double , 2>, container_hasher>> vectorSet2D;
 typedef vector<unordered_set<array<int, 3>, container_hasher>> vectorSet3;
+typedef unordered_set<array<double, 2>, container_hasher> unSet2D;
 typedef unordered_set<array<int, 2>, container_hasher> unSet2;
 typedef unordered_set<array<int, 3>, container_hasher> unSet3;
 typedef unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> hashmapUnset;
@@ -79,6 +81,9 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
  */
 template <typename T>
 int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+
+template <typename T>
+int getAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, vectorSet2D &all_pointsClusters);
 
 
 /**
@@ -192,7 +197,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters);
  * @param [in,out] projection - Data structure with remaining tiles
  * @param [in] min_size - Parameter for raster algorithm (it is the minimum number of tiles in order to form a cluster)
  * @param [in,out] clusters - Data structure where save the clusters found
- * @return 0 in case of success, -3 in case of bad projection structure, -2 in case of insert error
+ * @return 0 in case of success, -3 if can't complete clustering, -2 in case of insert error
  */
 int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters);
 

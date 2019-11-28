@@ -322,8 +322,7 @@ int clusteringTiles(hashmap &projection, int min_size, vectorSet2 &clusters) {
 
 int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size, vectorSet3 &clusters) {
     if (squareProjection.empty()) {
-        cerr << "Bad projection data structure" << endl;
-        return dataError(__FUNCTION__);
+        return -3;
     }
     hashmap::iterator iterator;
 
@@ -374,7 +373,10 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
         }
     }
 
-    return 0;
+    if (clusters.empty())
+        return -3;
+    else
+        return 0;
 }
 
 // under the function there are the two variants of T type
@@ -644,3 +646,64 @@ int analyzeClusters(vectorSet2 &clusters, hashmapUnset &all_points, double preci
 
     return returnValue;
 }
+
+template<typename T>
+int getAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters,
+                          unordered_map<array<int, 2>, unordered_set<array<double, 2>, container_hasher>, container_hasher> &all_points,
+                          vectorSet2D &all_pointsClusters) {
+
+    int count_points = 0;
+    if (clusters.empty()) {
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
+
+    if (all_points.empty()) {
+        cerr << "Bad all_points data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
+
+    hashmapUnset::iterator it_map_all_points;
+    unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
+    typename unordered_set<T, container_hasher>::iterator it_tiles;
+
+
+    /************ for each cluster in clusters ************/
+    for (int j = 0; j < clusters.size(); j++) {
+        unordered_set<array<double , 2>, container_hasher> s;
+        //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
+        if (clusters.at(j).empty()) {
+            cerr << "Bad cluster structure" << endl;
+            return dataError(__FUNCTION__);
+        }
+        it_tiles = clusters.at(j).begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of clusters)
+        /************ for each tile in cluster j-th ************/
+        for (int i = 0; i < clusters.at(j).size(); i++) {
+
+            it_map_all_points = all_points.find({(*it_tiles)[0], (*it_tiles)[1]}); // try to find in all_points the tile (with its list of points) from cluster
+            if (it_map_all_points != all_points.end()) {
+                if ((it_map_all_points -> second).empty()) {
+                    cerr << "Bad all_points structure" << endl;
+                    return dataError(__FUNCTION__);
+
+                }
+                it_set_all_points = (it_map_all_points -> second).begin(); // pointer to the first element in the list of points associated to the found tile
+                /************ for each point in the tile ************/
+                for (int k = 0; k < (it_map_all_points -> second).size(); k++) {
+                    s.insert({ (*it_set_all_points)[0], (*it_set_all_points)[1]});
+                    it_set_all_points++;
+                    count_points++;
+                }
+                it_map_all_points++;
+            }
+
+            it_tiles++;
+        }
+        all_pointsClusters.push_back(s);
+    }
+
+
+    return 0;
+}
+template int getAllPointsClustered<array<int, 3>>(vectorSet3 &clusters, hashmapUnset &all_points, vectorSet2D &all_pointsClusters);
+template int getAllPointsClustered<array<int, 2>>(vectorSet2 &clusters, hashmapUnset &all_points, vectorSet2D &all_pointsClusters);

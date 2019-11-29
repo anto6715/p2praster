@@ -44,14 +44,14 @@ struct container_hasher {
     }
 };
 
-typedef unordered_map<array<int, 2>, double, container_hasher> hashmap;
-typedef vector<unordered_set<array<int, 2>, container_hasher>> vectorSet2;
-typedef vector<unordered_set<array<double , 2>, container_hasher>> vectorSet2D;
-typedef vector<unordered_set<array<int, 3>, container_hasher>> vectorSet3;
-typedef unordered_set<array<double, 2>, container_hasher> unSet2D;
-typedef unordered_set<array<int, 2>, container_hasher> unSet2;
-typedef unordered_set<array<int, 3>, container_hasher> unSet3;
-typedef unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> hashmapUnset;
+typedef unordered_map<array<int, 2>, double, container_hasher> hashmap; // contains projection result, key is tile, value is its cardinality
+typedef vector<unordered_set<array<int, 2>, container_hasher>> vectorSet2; // vector contains clusters. Each cluster (unordered_set) contains its tiles
+typedef vector<unordered_set<array<double , 2>, container_hasher>> vectorSet2D; // vector contains clusters. Each cluster (unordered_set) contains its points
+typedef vector<unordered_set<array<int, 3>, container_hasher>> vectorSet3; // vector contains clusters. Each cluster (unordered_set) contains its tiles with respective cardinality
+typedef unordered_set<array<double, 2>, container_hasher> unSet2D; // cluster that contains its points
+typedef unordered_set<array<int, 2>, container_hasher> unSet2; // Cluster that contains tiles
+typedef unordered_set<array<int, 3>, container_hasher> unSet3; // Cluster that contains tiles and respective cardinality
+typedef unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> hashmapUnset; // contains mapping tiles and the points associated
 
 
 /**
@@ -75,8 +75,8 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
  * point with its clusters. Any point not clustered is assigned at cluster 0.
  *
  * @tparam T - Type of array, can be: array<int, 3> or array<int, 2>
- * @param clusters - Data structure which contains clusters to print
- * @param all_points - Data structure which contains the mapping tiles-points
+ * @param [in] clusters - Data structure which contains clusters to print
+ * @param [in] all_points - Data structure which contains the mapping tiles-points
  * @return 0 in case of success, -7 in case of open file error, -3 in case of bad structure
  */
 template <typename T>

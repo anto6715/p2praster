@@ -42,14 +42,23 @@ int getPrecision(vectorSet2D &C, vectorSet2D &T, double &Precision) {
         goto ON_EXIT;
     }
 
-    /// Get ni
+    /// Get dimension of each cluster
     for (int i = 0; i < C.size(); ++i) {
         n[i] = C.at(i).size();
+        if (!n[i]) {
+            cerr << "Cluster can't be empty" << endl;
+            returnValue = dataError(__FUNCTION__);
+            goto ON_EXIT;
+        }
     }
 
     /// Get max_nij
     for (int i = 0; i < C.size(); ++i) {
-        max_nij[i] = getMax_nij(T, C.at(i));
+        returnValue = getMax_nij(T, C.at(i), max_nij[i]);
+        if (returnValue < 0 ) {
+            cerr << "Can't compute max_nij" << endl;
+            goto ON_EXIT;
+        }
     }
 
     /// compute precision for each clusters
@@ -62,7 +71,7 @@ int getPrecision(vectorSet2D &C, vectorSet2D &T, double &Precision) {
     for (int j = 0; j < C.size(); ++j) {
         Precision += _precision[j];
     }
-    Precision/=C.size();
+    Precision /= C.size();
 
     returnValue = 0;
 
@@ -90,6 +99,7 @@ int getNij(unSet2D &Ti, unSet2D &Ci) {
         cerr << "Bad cluster data structure" << endl;
         return dataError(__FUNCTION__);
     }
+
     unSet2D intersection;
 
     /// Cluster intersection
@@ -104,7 +114,9 @@ int getNij(unSet2D &Ti, unSet2D &Ci) {
     return intersection.size();
 }
 
-int getMax_nij(vectorSet2D &T, unSet2D &Ci) {
+
+
+int getMax_nij(vectorSet2D &T, unSet2D &Ci, int &max_nij) {
     if (T.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
@@ -119,8 +131,13 @@ int getMax_nij(vectorSet2D &T, unSet2D &Ci) {
     unSet2D::iterator it;
 
     /// clusters intersection
-    int max_nij = 0;
+    max_nij = 0;
     for (auto & i : T) {
+        if (i.empty()) {
+            cerr << "Bad cluster data structure" << endl;
+            return dataError(__FUNCTION__);
+        }
+
         for (auto j : Ci) {
             if (i.find(j) != i.end()){
                 auto check = intersection.insert(j);
@@ -129,12 +146,13 @@ int getMax_nij(vectorSet2D &T, unSet2D &Ci) {
                 }
             }
         }
+
         if (intersection.size() > max_nij)
             max_nij = intersection.size();
         intersection.clear();
     }
 
-    return max_nij;
+    return 0;
 }
 
 int getMax_nij_mji(vectorSet2D &T, unSet2D &Ci, int &max_nij, int &mji) {
@@ -154,6 +172,11 @@ int getMax_nij_mji(vectorSet2D &T, unSet2D &Ci, int &max_nij, int &mji) {
     /// clusters intersection
     max_nij = 0;
     for (auto & i : T) {
+        if (i.empty()) {
+            cerr << "Bad cluster data structure" << endl;
+            return dataError(__FUNCTION__);
+        }
+
         for (auto j : Ci) {
             if (i.find(j) != i.end()) {
                 auto check = intersection.insert(j);
@@ -164,8 +187,8 @@ int getMax_nij_mji(vectorSet2D &T, unSet2D &Ci, int &max_nij, int &mji) {
         }
 
         if (intersection.size() > max_nij) {
-            max_nij = intersection.size();
-            mji = i.size();
+            max_nij = intersection.size(); // intersection set with highest cardinality
+            mji = i.size(); // cardinality of the majority partition Tj_i
         }
 
         intersection.clear();
@@ -184,10 +207,11 @@ int getRecall(vectorSet2D &C, vectorSet2D &T, double &Recall) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
+
     int returnValue;
 
-    int *mji = nullptr; /// n[i] is the size of i-th cluster
-    int *max_nij = nullptr; /// nij is the cardinality of intersection between the clusters C[i] and T[i]
+    int *mji = nullptr; /// is the cardinality of major partition Tj_i
+    int *max_nij = nullptr; /// nij is the cardinality of intersection between the clusters C[i] and T[j]
     double *_recall = nullptr;
 
     mji = new (nothrow) int[C.size()];
@@ -247,7 +271,7 @@ double getFMeasure(double Recall, double Precision) {
     return 2.0*(Recall*Precision)/(Recall+Precision);
 }
 
-int getConditionalEntropy(vectorSet2D &C, vectorSet2D &T, int ni, double &Entropy) {
+int getConditionalEntropy(vectorSet2D &C, vectorSet2D &T, int n, double &Entropy) {
     if (T.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
@@ -257,14 +281,14 @@ int getConditionalEntropy(vectorSet2D &C, vectorSet2D &T, int ni, double &Entrop
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
-    if (ni <= 0) {
+    if (n <= 0) {
         cerr <<"Dataset points can't be <= 0 " << endl;
         return argumentError(__FUNCTION__);
     }
 
     int returnValue;
-    double *pCi = nullptr;
-    double **pij = nullptr;
+    double *pCi = nullptr; /// pCi[i] is the probability of cluster Ci: n_i/n
+    double **pij = nullptr; /// pij[i][j] is the probability that a point in cluster i also belongs to partition j: nij/n
     double *pij_storage = nullptr;
 
     pCi = new (nothrow) double[C.size()];
@@ -292,14 +316,14 @@ int getConditionalEntropy(vectorSet2D &C, vectorSet2D &T, int ni, double &Entrop
     }
 
     /// compute pCi
-    returnValue = getPCi(C, ni, pCi);
+    returnValue = getPCi(C, n, pCi);
     if(returnValue) {
         cerr << "Can't compute pCi" << endl;
         goto ON_EXIT;
     }
 
     /// compute pij
-    returnValue = getPij(C, T, pij, ni);
+    returnValue = getPij(C, T, pij, n);
     if(returnValue) {
         cerr << "Can't compute pij" << endl;
         goto ON_EXIT;
@@ -331,30 +355,45 @@ int getConditionalEntropy(vectorSet2D &C, vectorSet2D &T, int ni, double &Entrop
     return returnValue;
 }
 
-int getPij(vectorSet2D &C, vectorSet2D &T, double **pij, int ni) {
-    for (int i = 0; i < C.size(); ++i) {
-        for (int j = 0; j < T.size(); ++j) {
-            int nij = getNij(T.at(j), C.at(i));
-            if (nij < 0)
-                return functionError(__FUNCTION__);
-            pij[i][j] = (double)nij/ni;
-        }
+int getPij(vectorSet2D &C, vectorSet2D &T, double **pij, int n) {
+    if (T.empty()) {
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
     }
-    return 0;
-}
 
-int getPCi(vectorSet2D &C, int ni, double *pCi) {
     if (C.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
     }
-    if (ni <= 0) {
+
+    if (n <= 0) {
         cerr <<"Dataset points can't be <= 0 " << endl;
         return argumentError(__FUNCTION__);
     }
 
     for (int i = 0; i < C.size(); ++i) {
-        pCi[i] = (double) C.at(i).size()/ni;
+        for (int j = 0; j < T.size(); ++j) {
+            int nij = getNij(T.at(j), C.at(i));
+            if (nij < 0)
+                return functionError(__FUNCTION__);
+            pij[i][j] = (double)nij/n;
+        }
+    }
+    return 0;
+}
+
+int getPCi(vectorSet2D &C, int n, double *pCi) {
+    if (C.empty()) {
+        cerr << "Bad clusters data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
+    if (n <= 0) {
+        cerr <<"Dataset points can't be <= 0 " << endl;
+        return argumentError(__FUNCTION__);
+    }
+
+    for (int i = 0; i < C.size(); ++i) {
+        pCi[i] = (double) C.at(i).size()/n;
     }
     return 0;
 }

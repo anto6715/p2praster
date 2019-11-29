@@ -17,18 +17,18 @@
 namespace po = boost::program_options;
 
 /*** Default Parameters ***/
-const int           DEFAULT_PEERS = 500; // number of peers
+const int           DEFAULT_PEERS = 10; // number of peers
 const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
 const double        DEFAULT_CONVTHRESHOLD = 0.001; // local convergence tolerance
 const int           DEFAULT_CONVLIMIT = 3; // number of consecutive rounds in which a peer must locally converge
 const int           DEFAULT_ROUNDSTOEXECUTE = -1;
-const double        DEFAULT_PRECISION = -4.2;
+const double        DEFAULT_PRECISION = -4.3;
 const int           DEFAULT_THRESHOLD = 2;
 const int           DEFAULT_MIN_SIZE = 3;
 const int           DEFAULT_RADIUS = 0;
 const int           DEFAULT_MAXDISTANCE = 2;
-const int           DEFAULT_TYPEALGORITHM = 0;
+const int           DEFAULT_TYPEALGORITHM = 1;
 const int           DEFAULT_MINSQUARES = 1;
 //const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
@@ -565,16 +565,16 @@ int main(int argc, char **argv) {
     string          outputFilename;
     igraph_t        graph;
     Params          params;
-    int             ni;
+    int             n;
     int             start;
     double          mergeprojectiontime;
     double          rastertime;
     double          gengraphtime;
     double          greaddatasettime;
-    double          Precision;
-    double          Recall;
-    double          F1;
-    double          Hentropy;
+    double          Precision;  // statistic
+    double          Recall;  // statistic
+    double          F1;  // statistic
+    double          Hentropy;  // statistic
 
 
 
@@ -585,18 +585,19 @@ int main(int argc, char **argv) {
     double **dataset = nullptr;
     double *dimestimate = nullptr;
     hashmap *projection = nullptr;
-    hashmap *squareProjection = nullptr;
-    vectorSet3 *clusters3 = nullptr;
+    hashmap *squareProjection = nullptr; // tile within of peer checkerboard partition
+    vectorSet3 *clusters3 = nullptr; // where clusters from first version of algorithm are stored
     vector<array<int, 2>> *centroids = nullptr;
-    vectorSet2 *clusters2 = nullptr;
+    vectorSet2 *clusters2 = nullptr; // where clusters from second version of algorithm are stored
 
-    hashmapUnset all_points;
-    hashmapUnset all_points_sequential;
-    hashmap projection_sequential;
-    hashmap projection_distributed;
-    vectorSet2 clusters_sequential;
-    vectorSet2D all_pointsClusters;
-    vectorSet2D all_pointsClusters_sequential;
+    /*** Variables for statistics ***/
+    hashmapUnset all_points; // mapping tile-points
+    hashmapUnset all_points_sequential; // mapping tile-points
+    hashmap projection_sequential; // for get all_points  in sequential version
+    hashmap projection_distributed; // for get all_points  in distributed version
+    vectorSet2 clusters_sequential; // where save clusters obtained with sequential algorithm
+    vectorSet2D all_pointsClusters; // clusters with relative points
+    vectorSet2D all_pointsClusters_sequential; // (sequential version) clusters with relative points
 
     /** assign parameters read from command line */
     initParams(params);
@@ -613,7 +614,7 @@ int main(int argc, char **argv) {
 
     /*** read dataset dimensions ***/
     StartTheClock();
-    returnValue = readDataset(&dataset_storage, &dataset, params.name_file, ni);
+    returnValue = readDataset(&dataset_storage, &dataset, params.name_file, n);
     if (returnValue) {
         cerr << "Can't read dataset" << params.name_file << endl;
         goto ON_EXIT;
@@ -631,10 +632,10 @@ int main(int argc, char **argv) {
         goto ON_EXIT;
     }
 
-    partitionDataset(peerLastItem, params.peers, ni);
+    partitionDataset(peerLastItem, params.peers, n);
 
     /** check the partitioning correctness */
-    returnValue = checkPartitioning(peerLastItem, params.peers, ni);
+    returnValue = checkPartitioning(peerLastItem, params.peers, n);
     if (returnValue)
         goto ON_EXIT;
 
@@ -830,12 +831,12 @@ int main(int argc, char **argv) {
 
 
     /// save mapping tile-points into all_points algorithm with different parameters
-    returnValue = mapToTilesPrime(dataset, -4.2, 2, ni, projection_sequential, all_points_sequential);
+    returnValue = mapToTilesPrime(dataset, -4.2, 2, n, projection_sequential, all_points_sequential);
     if (returnValue)
         goto ON_EXIT;
 
     /// save mapping tile-points into all_points algorithm with default parameters
-    returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, ni, projection_distributed, all_points);
+    returnValue = mapToTilesPrime(dataset, params.precision, params.threshold, n, projection_distributed, all_points);
     if (returnValue)
         goto ON_EXIT;
 
@@ -874,8 +875,7 @@ int main(int argc, char **argv) {
 
     F1 = getFMeasure(Recall, Precision);
 
-    getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, ni, Hentropy);
-
+    getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, n, Hentropy);
 
     cout << "\n\n";
     cout << "Precision: " << Precision << endl;

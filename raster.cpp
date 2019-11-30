@@ -381,7 +381,7 @@ int clusteringTiles(hashmap &squareProjection, hashmap &projection, int min_size
 
 // under the function there are the two variants of T type
 template <typename T>
-int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points){
+int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, string outputfile){
     if (clusters.empty()) {
         cerr << "Bad clusters data structure" << endl;
         return dataError(__FUNCTION__);
@@ -392,15 +392,17 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
         return dataError(__FUNCTION__);
     }
 
-    ofstream outfile("./clustered.csv");
+    ofstream outfile("./log/clusters_" + outputfile + ".csv");
     if (!outfile.is_open()) {
-        cerr << "can not open file clustered.csv for writing" << endl;
+        cerr << "can not open file clusters_" + outputfile + ".csv" + "for writing" << endl;
         return fileError(__FUNCTION__);
     }
 
     int count_not_clustered = 0;
     int count_tiles = 0;
     int count_points = 0;
+    double outputOnFile = !outputfile.empty();
+
     hashmapUnset::iterator it_map_all_points;
     unordered_set<array<double , 2>, container_hasher>::iterator it_set_all_points;
     typename unordered_set<T, container_hasher>::iterator it_tiles;
@@ -469,12 +471,30 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
     }
 
     outfile.close();
-    cout << "Points not clustered: " << count_not_clustered << endl;
-    cout << "Points clustered: " << count_points << endl;
-    cout << "Total points analyzed " << count_points + count_not_clustered << endl;
-    cout << "Tile not clustered: " << all_points.size() << endl;
-    cout << "Tiles clustered: " << count_tiles << endl;
-    cout << "Clusters: " << clusters.size() << endl;
+    if (!outputOnFile) {
+        cout << "\n\n";
+        cout << "Points not clustered: " << count_not_clustered << endl;
+        cout << "Points clustered: " << count_points << endl;
+        cout << "Total points analyzed " << count_points + count_not_clustered << endl;
+        cout << "Tile not clustered: " << all_points.size() << endl;
+        cout << "Tiles clustered: " << count_tiles << endl;
+        cout << "Clusters: " << clusters.size() << endl;
+    } else {
+        outfile.open("./log/metrics_" + outputfile + ".txt", ofstream::app);
+
+        if (outfile.is_open()) {
+            outfile << "\n\n";
+            outfile << "Points not clustered: " << count_not_clustered << endl;
+            outfile << "Points clustered: " << count_points << endl;
+            outfile << "Total points analyzed " << count_points + count_not_clustered << endl;
+            outfile << "Tile not clustered: " << all_points.size() << endl;
+            outfile << "Tiles clustered: " << count_tiles << endl;
+            outfile << "Clusters: " << clusters.size() << endl;
+        }
+
+        outfile.close();
+    }
+
 
     return 0;
 }
@@ -482,8 +502,8 @@ int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters
  * These declarations are necessary for compiler in order to correctly link
  * the header of a function with its implementation in presence of a template
  */
-template int printAllPointsClustered<array<int, 3>>(vectorSet3 &clusters, hashmapUnset &all_points);
-template int printAllPointsClustered<array<int, 2>>(vectorSet2 &clusters, hashmapUnset &all_points);
+template int printAllPointsClustered<array<int, 3>>(vectorSet3 &clusters, hashmapUnset &all_points, string outputfile);
+template int printAllPointsClustered<array<int, 2>>(vectorSet2 &clusters, hashmapUnset &all_points, string outputfile);
 
 
 // under the function there are the two variants of T type

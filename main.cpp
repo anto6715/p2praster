@@ -32,7 +32,7 @@ const int           DEFAULT_TYPEALGORITHM = 0;
 const int           DEFAULT_MINSQUARES = 2;
 //const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
-const string        DEFAULT_OUTPUTFILENAME;
+const string        DEFAULT_OUTPUTFILENAME;// "prova";
 
 /*!< @struct Params - A structure containing parameters read from the command-line.  */
 struct Params {
@@ -585,6 +585,7 @@ int main(int argc, char **argv) {
     double          Recall;  // statistic
     double          F1;  // statistic
     double          Hentropy;  // statistic
+    ofstream outfile;
 
 
 
@@ -663,7 +664,10 @@ int main(int argc, char **argv) {
     }
 
     // determine minimum and maximum vertex degree for the graph
-    graphProperties(graph);
+    if (!outputOnFile) {
+        graphProperties(graph);
+    }
+
 
     /*** Apply first Raster projection to each peer's dataset ***/
     if (!outputOnFile) {
@@ -775,7 +779,9 @@ int main(int argc, char **argv) {
         for(int peerID = 0; peerID < params.peers; peerID++) {
             returnValue = clusteringTiles(squareProjection[peerID], projection[peerID], params.min_size, clusters3[peerID]);
             if (returnValue) {
-                cout << "Peer: " << peerID << " didn't found any cluster" << endl;
+                if (!outputOnFile) {
+                    cout << "Peer: " << peerID << " didn't found any cluster" << endl;
+                }
             } else {
                 returnValue = getCentroids(clusters3[peerID], centroids[peerID]);
                 if (returnValue)
@@ -887,20 +893,36 @@ int main(int argc, char **argv) {
     F1 = getFMeasure(Recall, Precision);
 
     getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, n, Hentropy);
+    if (!outputOnFile) {
+        cout << "\n\n";
+        cout << "Precision: " << Precision << endl;
+        cout << "Recall: " << Recall << endl;
+        cout << "F1 measure: " << F1 << endl;
+        cout << "Conditional Entropy: " << Hentropy << endl;
+        cout << "\n\n";
+    } else {
+        outfile.open("./log/metrics_" + params.outputFilename + ".txt", ofstream::app);
 
-    cout << "\n\n";
-    cout << "Precision: " << Precision << endl;
-    cout << "Recall: " << Recall << endl;
-    cout << "F1 measure: " << F1 << endl;
-    cout << "Conditional Entropy: " << Hentropy << endl;
-    cout << "\n\n";
+        if (outfile.is_open()) {
+            outfile << "Precision: " << Precision << endl;
+            outfile << "Recall: " << Recall << endl;
+            outfile << "F1 measure: " << F1 << endl;
+            outfile << "Conditional Entropy: " << Hentropy << endl;
+        } else {
+            returnValue = fileError(__FUNCTION__);
+        }
+
+        outfile.close();
+    }
+
+
 
 
     /// Prints information about clusters
     if (params.typeAlgorithm == 0)
-        returnValue = printAllPointsClustered(clusters3[0], all_points);
+        returnValue = printAllPointsClustered(clusters3[0], all_points, params.outputFilename);
     else
-        returnValue = printAllPointsClustered(clusters2[0], all_points);
+        returnValue = printAllPointsClustered(clusters2[0], all_points, params.outputFilename);
     if (returnValue)
         goto ON_EXIT;
 
@@ -1983,6 +2005,7 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
     int returnValue = -1;
     int Numberofconverged;
     int rounds;
+    bool outputOnFile = !params.outputFilename.empty();
 
     double *prevestimate = nullptr;
     bool *converged = nullptr;
@@ -2007,8 +2030,6 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
 
     rounds = 0;
     Numberofconverged = params.peers;
-
-    cout <<"\nStarting distributed projection merge..." << endl;
 
     /*** Merge information about agglomeration ***/
     while((params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
@@ -2062,7 +2083,9 @@ int distributedProjection(Params &params, igraph_t &graph, hashmap *projection, 
         }
 
         rounds++;
-        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+        if(!outputOnFile) {
+            cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+        }
 
         params.roundsToExecute--;
     }
@@ -2087,6 +2110,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     int returnValue = -1;
     int rounds;
     int Numberofconverged;
+    bool outputOnFile = !params.outputFilename.empty();
 
     bool *converged = nullptr;
     int *convRounds = nullptr;
@@ -2123,8 +2147,6 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     rounds = 0;
     Numberofconverged = params.peers;
     params.roundsToExecute = DEFAULT_ROUNDSTOEXECUTE;
-
-    cout <<"\nStarting distributed merge of clusters..." << endl;
 
     /*** Start distributed cluster merge ***/
     while( (params.roundsToExecute < 0 && Numberofconverged) || params.roundsToExecute > 0){
@@ -2175,7 +2197,9 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
         }
 
         rounds++;
-        cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+        if(!outputOnFile) {
+            cerr << "\r Active peers: " << Numberofconverged << " - Rounds: " << rounds << "          " << endl;
+        }
         params.roundsToExecute--;
 
     }

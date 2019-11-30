@@ -80,7 +80,7 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
  * @return 0 in case of success, -7 in case of open file error, -3 in case of bad structure
  */
 template <typename T>
-int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points);
+int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, string outputfile);
 
 template <typename T>
 int getAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, vectorSet2D &all_pointsClusters);

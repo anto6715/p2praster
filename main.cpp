@@ -17,19 +17,19 @@
 namespace po = boost::program_options;
 
 /*** Default Parameters ***/
-const int           DEFAULT_PEERS = 10; // number of peers
+const int           DEFAULT_PEERS = 100; // number of peers
 const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
 const double        DEFAULT_CONVTHRESHOLD = 0.001; // local convergence tolerance
 const int           DEFAULT_CONVLIMIT = 3; // number of consecutive rounds in which a peer must locally converge
-const int           DEFAULT_ROUNDSTOEXECUTE = -1;
-const double        DEFAULT_PRECISION = -4.3;
+const int           DEFAULT_ROUNDSTOEXECUTE = 2;
+const double        DEFAULT_PRECISION = -4.2;
 const int           DEFAULT_THRESHOLD = 2;
 const int           DEFAULT_MIN_SIZE = 3;
 const int           DEFAULT_RADIUS = 0;
 const int           DEFAULT_MAXDISTANCE = 2;
-const int           DEFAULT_TYPEALGORITHM = 1;
-const int           DEFAULT_MINSQUARES = 1;
+const int           DEFAULT_TYPEALGORITHM = 0;
+const int           DEFAULT_MINSQUARES = 2;
 //const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
 const string        DEFAULT_OUTPUTFILENAME;
@@ -114,6 +114,16 @@ struct Grid {
  * @return Return Manhattan Distance
  */
 int manhattanDistance(int x1, int x2, int y1, int y2);
+
+
+/**
+ * This function computes the centroids of  cluster using a weighted average.
+ *
+ * @param [in] cluster - Data structure which contains cluster
+ * @param [in,out] centroid - Data structure which contains centroid
+ * @return 0 if success, -3 in case of bad data structures
+ */
+int getCentroid(unSet3 &cluster, array<int, 2> &centroid);
 
 
 /**
@@ -774,6 +784,7 @@ int main(int argc, char **argv) {
 
         }
 
+
         delete[] projection, projection = nullptr;
         delete[] squareProjection, squareProjection = nullptr;
 
@@ -931,6 +942,32 @@ int main(int argc, char **argv) {
 
 int manhattanDistance(int x1, int x2, int y1, int y2) {
     return abs(x1-x2) + abs(y1-y2);
+}
+
+int getCentroid(unSet3 &cluster, array<int, 2> &centroid) {
+    if (cluster.empty()) {
+        cerr << "Bad cluster data structure" << endl;
+        return dataError(__FUNCTION__);
+    }
+
+    unSet3::iterator it_tiles;
+    double n, x, y;
+
+    //cout << "Cluster n° " << j << " with size " << cluster.at(j).size() << ": " << endl;
+    n = 0, x = 0, y = 0;
+    it_tiles = cluster.begin(); // pointer to start of j-th cluster in clusters (cluster = list of tiles, clusters = list of cluster)
+    /************ for each tile in cluster j-th ************/
+    for (int i = 0; i < cluster.size(); i++) {  // clusters.at(j).size() represent the number of tiles contained in cluster j-th
+        x += (*it_tiles)[0]*(*it_tiles)[2];
+        y += (*it_tiles)[1]*(*it_tiles)[2];
+        n += (*it_tiles)[2];
+        it_tiles++;
+    }
+
+    centroid = {(int) (x/n), (int) (y/n)};
+
+
+    return 0;
 }
 
 int getCentroids(vectorSet3 &clusters, vector<array<int, 2>> &centroids) {
@@ -1123,6 +1160,7 @@ int projectionMerge(hashmap &projectionN, hashmap &projectionP){
  * The second for cycle tries to find the n tiles into the hashmap, it costs O(n).
  * If a tile is not present add it to the hashmap, also in this case the add operation
  * in the worst case will be O(n).
+ *
  */
 int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
     if (clusterN.empty()) {
@@ -1162,7 +1200,7 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
 
         itTmp = tmp.find(tile);
         if (itTmp != tmp.end()) {
-            if (!average(&itTmp -> second, cardinality)) {
+            if (average(&itTmp -> second, cardinality)) {
                 return arithmeticError(__FUNCTION__);
             }
         }
@@ -1203,8 +1241,9 @@ int clusterUnion(unSet3 &clusterN, unSet3 &clusterP) {
 int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int, 2>> &centroidsN, vector<array<int, 2>> &centroidsP, int maxDistance) {
     int tmpSize = centroidsP.size(); /// get the current dimension because it will increase but we are not interested to the clusters that will be added at the end
     int returnValue;
+    int distance;
     int *notCopyP = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, it means that the i-th cluster of clusterP is also present in clusterN */
-    int *notCopyN = nullptr;  /**!< array of int, if notCopyP[i] is set to 1, it means that the i-th cluster of clusterN is also present in clusterP */
+    int *notCopyN = nullptr;  /**!< array of int, if notCopyN[i] is set to 1, it means that the i-th cluster of clusterN is also present in clusterP */
 
     notCopyP = new (nothrow) int[centroidsP.size()]();
     if(!notCopyP)
@@ -1219,14 +1258,29 @@ int clustersMerge(vectorSet3 &clustersN, vectorSet3 &clustersP, vector<array<int
 
     for (int k = 0; k < centroidsN.size(); k++) {
         for (int l = 0; l < tmpSize; l++) {
-            if (manhattanDistance(centroidsN.at(k)[0], centroidsP.at(l)[0], centroidsN.at(k)[1], centroidsP.at(l)[1]) <= maxDistance) {
+            distance = manhattanDistance(centroidsN.at(k)[0], centroidsP.at(l)[0], centroidsN.at(k)[1], centroidsP.at(l)[1]);
+            if (distance <= maxDistance) {
                 notCopyP[l] = 1, notCopyN[k] = 1;
-                if ( !(clustersP.at(l) == clustersN.at(k))) {
-                    if (!clusterUnion(clustersN.at(k), clustersP.at(l))) {
+                if ( !(clustersP.at(l).size() == clustersN.at(k).size() && !distance)) {  /// if clusters size and distance = 0 the two clusters are considered identical
+
+                    returnValue = clusterUnion(clustersN.at(k), clustersP.at(l));
+                    if (returnValue) {
                         cerr << "Cluster Union error" << endl;
                         returnValue = -25;
                         goto ON_EXIT;
                     }
+
+                    if(centroidsP.at(l) != centroidsN.at(k)) {
+                        returnValue = getCentroid(clustersP.at(l), centroidsP.at(l));
+                        if (returnValue) {
+                            cerr << "Centroids Union error" << endl;
+                            returnValue = -25;
+                            goto ON_EXIT;
+                        } else {
+                            centroidsN.at(k) = centroidsP.at(l);
+                        }
+                    }
+
 
                 }
 
@@ -2068,6 +2122,7 @@ int distributedCluster(Params &params, vectorSet3 *clusters3, igraph_t &graph, v
     // init parameters
     rounds = 0;
     Numberofconverged = params.peers;
+    params.roundsToExecute = DEFAULT_ROUNDSTOEXECUTE;
 
     cout <<"\nStarting distributed merge of clusters..." << endl;
 

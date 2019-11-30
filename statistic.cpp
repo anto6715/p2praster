@@ -224,7 +224,7 @@ int getRecall(vectorSet2D &C, vectorSet2D &T, double &Recall) {
         goto ON_EXIT;
     }
 
-    _recall = new (nothrow) double[C.size()];
+    _recall = new (nothrow) double[C.size()]();
     if(!_recall) {
         returnValue = memoryError(__FUNCTION__);
         goto ON_EXIT;
@@ -241,7 +241,10 @@ int getRecall(vectorSet2D &C, vectorSet2D &T, double &Recall) {
 
     /// compute recall for each clusters
     for (int i = 0; i < C.size(); ++i) {
-        _recall[i] = (double) max_nij[i]/mji[i];
+        if (max_nij[i] && mji[i]) {
+            _recall[i] = (double) max_nij[i]/mji[i];
+        }
+
     }
 
     /// compute average Recall

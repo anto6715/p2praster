@@ -9,6 +9,7 @@
 #include "igraph/igraph.h"
 #include <cstring>
 #include <random>
+#include <sys/stat.h>
 #include "raster.h"
 #include "error.h"
 #include "boost/program_options.hpp"
@@ -32,7 +33,7 @@ const int           DEFAULT_TYPEALGORITHM = 0;
 const int           DEFAULT_MINSQUARES = 2;
 //const string        DEFAULT_NAME_FILE = "/home/antonio/Scrivania/Datasets/Random authors/data_1000_shuffled.csv";
 const string        DEFAULT_NAME_FILE = "../Datasets/S-sets/s1.csv";
-const string        DEFAULT_OUTPUTFILENAME;// "prova";
+const string        DEFAULT_OUTPUTFILENAME =  "prova";
 
 /*!< @struct Params - A structure containing parameters read from the command-line.  */
 struct Params {
@@ -550,6 +551,15 @@ int generateRandomGraph(igraph_t &random_graph, int type, int n);
  */
 void printGraphType(int type);
 
+
+/**
+ * This function checks if pathname passed as argument exists
+ *
+ * @param [in] s - Pathname
+ * @return true if path exists
+ */
+bool IsPathExist(const std::string &s);
+
 using namespace std;
 using namespace std::chrono;
 
@@ -618,6 +628,16 @@ int main(int argc, char **argv) {
 
 
     outputOnFile = !params.outputFilename.empty();
+
+    if (outputOnFile) {
+        if (!IsPathExist("./log")) {
+            returnValue = mkdir("log", 0777);
+            if (returnValue) {
+                cerr << "Can't create log folder" << endl;
+                goto ON_EXIT;
+            }
+        }
+    }
 
     if (!outputOnFile) {
         printParams(params);
@@ -1904,7 +1924,7 @@ int handleArgument(int argc, char **argv, Params &params) {
                 ("thr",po::value<int>(), "threshold for raster")
                 ("maxdist",po::value<int>(), "max manhattann distance")
                 ("minsize",po::value<int>(), "min size for raster")
-                ("minsquare",po::value<int>(), "file name containing dataset")
+                ("minsquare",po::value<int>(), "min square for each peer in checkerboard partition")
                 (",i",po::value<string>(), "file name containing dataset")
                 (",t",po::value<int>(), "type of algorithm")
                 ;
@@ -2232,4 +2252,10 @@ int restoreDimestimate(double &dimestimate) {
         dimestimate = round(1/dimestimate);
 
     return 0;
+}
+
+bool IsPathExist(const std::string &s)
+{
+    struct stat buffer;
+    return (stat (s.c_str(), &buffer) == 0);
 }

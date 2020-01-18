@@ -17,11 +17,26 @@
 #include <chrono>
 #include <unordered_set>
 
+
 using namespace std;
 
 
 #ifndef P2PRASTER_RASTER_H
 #define P2PRASTER_RASTER_H
+
+struct Statistics {
+    double      Precision;  // statistic
+    double      Recall;  // statistic
+    double      F1;  // statistic
+    double      Entropy;  // statistic
+    int         clusters;
+    int         tileClustered;
+    int         tileNotClustered;
+    int         totalPoints;
+    int         pointsNotClustered;
+    int         pointsClustered;
+    int         totalTiles;
+};
 
 /**
  *
@@ -80,7 +95,7 @@ int printClusters(vector<unordered_set<T, container_hasher>> &clusters, int peer
  * @return 0 in case of success, -7 in case of open file error, -3 in case of bad structure
  */
 template <typename T>
-int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, string outputfile);
+int printAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, Statistics &stats, string outputfile);
 
 template <typename T>
 int getAllPointsClustered(vector<unordered_set<T, container_hasher>> &clusters, unordered_map<array<int, 2>, unordered_set<array<double , 2>, container_hasher>, container_hasher> &all_points, vectorSet2D &all_pointsClusters);

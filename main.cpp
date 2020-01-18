@@ -23,7 +23,7 @@ const int           DEFAULT_FANOUT = 3; //fan-out of peers
 const int           DEFAULT_GRAPHTYPE = 1; // graph distribution: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular (clique)
 const double        DEFAULT_CONVTHRESHOLD = 0.001; // local convergence tolerance
 const int           DEFAULT_CONVLIMIT = 3; // number of consecutive rounds in which a peer must locally converge
-const int           DEFAULT_ROUNDSTOEXECUTE = 2;
+const int           DEFAULT_ROUNDSTOEXECUTE = 10;
 const double        DEFAULT_PRECISION = -4.2;
 const int           DEFAULT_THRESHOLD = 2;
 const int           DEFAULT_MIN_SIZE = 3;
@@ -570,6 +570,29 @@ using namespace std::chrono;
  */
 void printParams(Params params);
 
+/**
+ * This function prints on terminal teh algorithm statistics,
+ * if a output file name is passed as input, it print this
+ * statistics on a csv file
+ *
+ * @param [in] stats - Struct with statistics parameters
+ * @param [in] params - Struct with algorithm parameters
+ * @param [in] outputfile - Output file name
+ * @return 0 if success, -7 in case of file error, -99 in case of function error
+ */
+int printStats(Statistics stats, Params params, string outputfile);
+
+
+/**
+ * This function creates a csv file in the specified
+ * end enters the name of variables
+ *
+ * @param folder - Folder where initialize csv file
+ * @param fileName - Csv filename to initialize
+ * @return 0 if success, -7 in case of file error, -99 in case of argument error
+ */
+int initCsvFile(string folder, string fileName);
+
 high_resolution_clock::time_point t1, t2;
 
 
@@ -585,16 +608,13 @@ int main(int argc, char **argv) {
     string          outputFilename;
     igraph_t        graph;
     Params          params;
+    Statistics      stats;
     int             n;
     int             start;
     double          mergeprojectiontime;
     double          rastertime;
     double          gengraphtime;
     double          greaddatasettime;
-    double          Precision;  // statistic
-    double          Recall;  // statistic
-    double          F1;  // statistic
-    double          Hentropy;  // statistic
     ofstream outfile;
 
 
@@ -834,6 +854,7 @@ int main(int argc, char **argv) {
 
     } else {
 
+
         // in this case all of the peers determine the same global projection
         // then locally clusters the data
 
@@ -898,54 +919,33 @@ int main(int argc, char **argv) {
 
 
     /// Obtain some statistics
-    returnValue = getPrecision(all_pointsClusters, all_pointsClusters_sequential, Precision);
+    returnValue = getPrecision(all_pointsClusters, all_pointsClusters_sequential, stats.Precision);
     if (returnValue) {
         cerr << "Can't compute Precision" << endl;
         goto ON_EXIT;
     }
 
-    returnValue = getRecall(all_pointsClusters, all_pointsClusters_sequential, Recall);
+    returnValue = getRecall(all_pointsClusters, all_pointsClusters_sequential, stats.Recall);
     if (returnValue) {
         cerr << "Can't compute Recall" << endl;
         goto ON_EXIT;
     }
 
-    F1 = getFMeasure(Recall, Precision);
+    stats.F1 = getFMeasure(stats.Recall, stats.Precision);
 
-    getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, n, Hentropy);
-    if (!outputOnFile) {
-        cout << "\n\n";
-        cout << "Precision: " << Precision << endl;
-        cout << "Recall: " << Recall << endl;
-        cout << "F1 measure: " << F1 << endl;
-        cout << "Conditional Entropy: " << Hentropy << endl;
-        cout << "\n\n";
-    } else {
-        outfile.open("./log/metrics_" + params.outputFilename + ".txt", ofstream::app);
-
-        if (outfile.is_open()) {
-            outfile << "Precision: " << Precision << endl;
-            outfile << "Recall: " << Recall << endl;
-            outfile << "F1 measure: " << F1 << endl;
-            outfile << "Conditional Entropy: " << Hentropy << endl;
-        } else {
-            returnValue = fileError(__FUNCTION__);
-        }
-
-        outfile.close();
-    }
-
-
-
+    getConditionalEntropy(all_pointsClusters, all_pointsClusters_sequential, n, stats.Entropy);
 
     /// Prints information about clusters
     if (params.typeAlgorithm == 0)
-        returnValue = printAllPointsClustered(clusters3[0], all_points, params.outputFilename);
+        returnValue = printAllPointsClustered(clusters3[0], all_points, stats, params.outputFilename);
     else
-        returnValue = printAllPointsClustered(clusters2[0], all_points, params.outputFilename);
+        returnValue = printAllPointsClustered(clusters2[0], all_points, stats, params.outputFilename);
     if (returnValue)
         goto ON_EXIT;
 
+    returnValue = printStats(stats, params, params.outputFilename);
+    if (returnValue)
+        goto ON_EXIT;
 
     returnValue = 0;
 
@@ -1912,7 +1912,7 @@ int handleArgument(int argc, char **argv, Params &params) {
         namespace po = boost::program_options;
 
         desc.add_options()
-                ("help", "produce help message")
+                ("help,h", "produce help message")
                 (",p", po::value<int>(), "number of peers")
                 (",f", po::value<int>(),"fan-out of peers")
                 (",d", po::value<int>(), "graph type: 1 geometric 2 Barabasi-Albert 3 Erdos-Renyi 4 regular")
@@ -1939,7 +1939,7 @@ int handleArgument(int argc, char **argv, Params &params) {
             if (vm.count("help")) {
                 cerr << desc << endl;
                 cerr.flush();
-                return argumentError(__FUNCTION__);
+                return -1;
             }
             po::notify(vm); /// throws on error, so do after help in case there are any problems
 
@@ -2258,4 +2258,108 @@ bool IsPathExist(const std::string &s)
 {
     struct stat buffer;
     return (stat (s.c_str(), &buffer) == 0);
+}
+
+int printStats(Statistics stats, Params params, string outputfile) {
+    int returnValue;
+
+    double outputOnFile = !outputfile.empty();
+
+    if (!outputOnFile) {
+        cout << "Precision: " << stats.Precision << endl;
+        cout << "Recall: " << stats.Recall << endl;
+        cout << "F1 measure: " << stats.F1 << endl;
+        cout << "Conditional Entropy: " << stats.Entropy << endl;
+        cout << "\n\n";
+        cout << "Points not clustered: " << stats.pointsNotClustered << endl;
+        cout << "Points clustered: " << stats.pointsClustered << endl;
+        cout << "Total points analyzed " << stats.totalPoints << endl;
+        cout << "Tile not clustered: " << stats.tileNotClustered << endl;
+        cout << "Tiles clustered: " << stats.tileClustered << endl;
+        cout << "Clusters: " << stats.clusters << endl;
+        cout << "\n\n";
+    } else {
+
+        string filename = "log";
+        string folder = "./log/";
+
+        if (!IsPathExist(folder + filename + ".csv")){
+            returnValue = initCsvFile(folder, filename);
+            if (returnValue)
+                return returnValue;
+        }
+
+
+        ofstream outfile(folder + filename + ".csv", ofstream::app);
+        if (!outfile.is_open()) {
+            cerr << "can not open file " + folder + outputfile + ".csv" + "for writing" << endl;
+            return fileError(__FUNCTION__);
+        }
+
+        outfile << stats.Precision << ",";
+        outfile << stats.Recall << ",";
+        outfile << stats.F1 << ",";
+        outfile << stats.Entropy << ",";
+        outfile << params.roundsToExecute << ",";
+        outfile << params.peers << ",";
+        outfile << params.precision << ",";
+        outfile << params.threshold << ",";
+        outfile << params.min_size << ",";
+        outfile << params.typeAlgorithm << ",";
+        outfile << params.fanOut << ",";
+        outfile << stats.pointsNotClustered << ",";
+        outfile << stats.pointsClustered << ",";
+        outfile << stats.totalPoints << ",";
+        outfile << stats.tileNotClustered << ",";
+        outfile << stats.tileClustered << ",";
+        outfile << stats.totalTiles << ",";
+        outfile << stats.clusters << endl;
+
+        outfile.close();
+    }
+
+
+    return 0;
+}
+
+int initCsvFile(string folder, string fileName){
+
+    if (folder.empty()) {
+        cerr << "Empty folder!" << endl;
+        return argumentError(__FUNCTION__);
+    }
+
+    if (fileName.empty()) {
+        cerr << "Empty file name!" << endl;
+        return argumentError(__FUNCTION__);
+    }
+
+    ofstream outfile(folder + fileName + ".csv");
+    if (!outfile.is_open()) {
+        cerr << "cannot init file " + fileName + ".csv" << endl;
+        return fileError(__FUNCTION__);
+    }
+
+    outfile << "Precision" << ",";
+    outfile << "Recall" << ",";
+    outfile << "F1" << ",";
+    outfile << "Entropy" << ",";
+    outfile << "roundsToExecute" << ",";
+    outfile << "peers" << ",";
+    outfile << "precision" << ",";
+    outfile << "threshold" << ",";
+    outfile << "min_size" << ",";
+    outfile << "typeAlgorithm" << ",";
+    outfile << "fanOut" << ",";
+    outfile << "pointsNotClustered" << ",";
+    outfile << "pointsClustered" << ",";
+    outfile << "totalPoints" << ",";
+    outfile << "tileNotClustered" << ",";
+    outfile << "tileClustered" << ",";
+    outfile << "totalTiles" << ",";
+    outfile << "clusters" << endl;
+
+    outfile.close();
+
+    return 0;
 }
